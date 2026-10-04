@@ -1,16 +1,16 @@
-import { CONFIG } from "./config.js?v=1004-0822";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-0822";
-const BUILD = "1004-0822"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1004-0828";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-0828";
+const BUILD = "1004-0828"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const TABS = ["wishlist", "ideas", "closet", "sizes"];
-const TAB_LABEL = { wishlist: "Wishlist", ideas: "Gift ideas", closet: "Closet", sizes: "Sizes" };
+const TAB_LABEL = { wishlist: "Wishlist", ideas: "Gift Ideas", closet: "Closet", sizes: "Sizes" };
 const OTHER_TYPES = ["Blanket", "Swaddle", "Lovey", "Bedding", "Bath", "Feeding", "Books", "Room decor", "Gear", "Keepsake"];
 const TOY_TYPES = ["Rattle", "Teether", "Stacker", "Blocks", "Book", "Plush", "Bath", "Music", "Activity", "Push & ride", "Puzzle", "Pretend play", "Outdoor"];
 const TYPES = ["Zippy", "Shorty", "Footie", "Romper", "Bodysuit", "Two-piece PJs", "Two-piece daywear", "Pajamas", "Dress", "Bubble", "Swim", "Outerwear", "Separates", "Swaddle", "Sleep bag", "Blanket", "Bib", "Hat", "Bow", "Shoes", "Accessory"];
 // Default choices; once the owner edits a list it's stored with the wishlist (typeLists).
 const DEFAULT_TYPES = { clothes: TYPES, toy: TOY_TYPES, other: OTHER_TYPES };
-const LIST_LABEL = { clothes: "clothing styles", toy: "kinds of toy", other: "kinds of other things" };
+const LIST_LABEL = { clothes: "Clothing Styles", toy: "Kinds of Toy", other: "Kinds of Other Things" };
 const isDemo = new URLSearchParams(location.search).has("demo") || window.CLOSET_DEMO === true;
 const $app = document.getElementById("app");
 // Owner sign-in lives only at the hidden address …/?admin (or …/#admin). Guests never see a
@@ -138,7 +138,7 @@ function render() {
       <button class="link quiet" data-act="share">Share</button><span class="muted"> · </span>
       <button class="link quiet" data-act="refresh" ${dis("refresh")}>Refresh</button>
       ${S.user ? `<span class="muted"> · ${owner() ? "Editing on" : "Signed in"} · </span><button class="link" data-act="signout">Sign out</button>` : ""}
-      ${owner() || adminEntry ? `<div class="build muted">Version ${esc(BUILD)} · <button class="link" data-act="force-update" ${dis("update")}>${busy.has("update") ? "Updating…" : "Get latest version"}</button></div>` : ""}
+      ${owner() || adminEntry ? `<div class="build muted">Version ${esc(BUILD)} · <button class="link" data-act="force-update" ${dis("update")}>${busy.has("update") ? "Updating…" : "Get Latest Version"}</button></div>` : ""}
     </footer>`;
 }
 
@@ -149,7 +149,7 @@ function adminPanel() {
       <p class="muted">Sign out, then sign in with the account that manages ${esc(CONFIG.babyName)}'s list.</p>
       <button class="btn ghost" data-act="signout" ${dis("signout")}>Sign out</button></div>`;
   }
-  return `<div class="admin-card"><b>Owner sign-in</b>
+  return `<div class="admin-card"><b>Owner Sign-In</b>
     <p class="muted">Sign in with the Google account that manages this list to add items, mark gifts received and edit sizes. You'll stay signed in on this device.</p>
     <button class="btn" data-act="signin" ${dis("signin")}>${busy.has("signin") ? "Opening Google…" : "Sign in with Google"}</button></div>`;
 }
@@ -193,7 +193,7 @@ function stockBanner(all, soldOut) {
   const when = last ? `Checked ${ago(last)}` : "Not checked yet";
   return `<div class="stock-bar${soldOut ? " alert" : ""}">
     <span>${soldOut ? `<b>${soldOut} ${soldOut === 1 ? "item looks" : "items look"} sold out.</b> Swap the link or remove ${soldOut === 1 ? "it" : "them"}.` : "Wishlist links are in stock."} <span class="muted">${when}</span></span>
-    <button class="link" data-act="check-stock" ${dis("stock")}>${busy.has("stock") ? stockProgress || "Checking…" : "Check now"}</button>
+    <button class="link" data-act="check-stock" ${dis("stock")}>${busy.has("stock") ? stockProgress || "Checking…" : "Check Now"}</button>
   </div>`;
 }
 const ago = (t) => {
@@ -244,7 +244,7 @@ function itemCard(i) {
 
   return `
     <article class="card ${claimed ? "claimed" : ""}">
-      ${i.priority === "most" && !claimed ? `<span class="ribbon">Most wanted</span>` : ""}
+      ${i.priority === "most" && !claimed ? `<span class="ribbon">Most Wanted</span>` : ""}
       ${link ? `<a href="${esc(link)}" target="_blank" rel="noopener noreferrer">${img(i.image, "thumb", i.title)}</a>` : img(i.image, "thumb", i.title)}
       <div class="card-body">
         <h3>${esc(i.title || "Untitled")}</h3>
@@ -259,7 +259,7 @@ function itemCard(i) {
 
 function closetView() {
   return `
-    <div class="section-title"><h2>What she has</h2>${owner() ? `<span class="title-links">${photoButton()}<button class="link" data-act="import-list">Import list</button></span>` : ""}</div>
+    <div class="section-title"><h2>What She Has</h2>${owner() ? `<span class="title-links">${photoButton()}<button class="link" data-act="import-list">Import List</button></span>` : ""}</div>
     <div class="search">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
       <input type="search" id="closet-search" class="in" value="${esc(closetQuery)}" placeholder="Search her closet, like “mermaids”" aria-label="Search her closet by print, brand or style" autocomplete="off" enterkeyhint="search" />
@@ -287,27 +287,35 @@ function closetResults() {
   const thingGrid = (arr) => `<div class="grid toys">${arr.sort((a, b) => a.name.localeCompare(b.name)).map((t) => tile(t, "edit-toy", t.name, [t.type].filter(Boolean), t.brand)).join("")}</div>`;
   return `
     <p class="muted result-count">${n} ${n === 1 ? "match" : "matches"} for “${esc(q)}”</p>
-    ${mp.length ? printGroups(mp) : ""}
+    ${mp.length ? printGroups(mp, { forceOpen: true }) : ""}
     ${mt.length ? `<div class="brand-head"><h2>Toys</h2></div>${thingGrid(mt)}` : ""}
-    ${mo.length ? `<div class="brand-head"><h2>Other things</h2></div>${thingGrid(mo)}` : ""}`;
+    ${mo.length ? `<div class="brand-head"><h2>Other Things</h2></div>${thingGrid(mo)}` : ""}`;
 }
 
-function printGroups(prints) {
+// Brands open/closed in the closet. Collapsed by default so a long closet is easy to scan;
+// searching or filtering opens everything that matches.
+const openBrands = new Set();
+function printGroups(prints, { forceOpen = false } = {}) {
   const groups = new Map();
   for (const p of prints) {
     const key = (p.brand || "Other").trim();
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(p);
   }
-  return [...groups.keys()].sort((a, b) => a.localeCompare(b)).map((n) => {
+  const names = [...groups.keys()].sort((a, b) => a.localeCompare(b));
+  const allOpen = forceOpen || names.length === 1;
+  return `${allOpen ? "" : `<div class="fold-all"><button class="link" data-act="fold-all" data-open="1">Expand All</button><button class="link" data-act="fold-all" data-open="0">Collapse All</button></div>`}
+  ${names.map((n) => {
     const b = brandByName(n);
     const ps = groups.get(n).sort((a, b) => !!a.outgrown - !!b.outgrown || (a.printName || "").localeCompare(b.printName || ""));
     return `
-      <div class="brand-head"><h2>${esc(n)}</h2>${b?.currentSize ? `<span class="chip">Wears ${esc(b.currentSize)}</span>` : ""}</div>
-      <div class="grid">
-        ${ps.map((p) => tile(p, "edit-print", (p.favorite ? "★ " : "") + (p.printName || "Untitled print"), p.types || [])).join("")}
-      </div>`;
-  }).join("");
+      <details class="brand-fold" data-brand="${esc(n)}" ${allOpen || openBrands.has(n) ? "open" : ""}>
+        <summary class="brand-head"><h2>${esc(n)}</h2><span class="brand-meta">${ps.length} ${ps.length === 1 ? "Print" : "Prints"}${b?.currentSize ? ` · Wears ${esc(b.currentSize)}` : ""}</span><span class="chev" aria-hidden="true"></span></summary>
+        <div class="grid">
+          ${ps.map((p) => tile(p, "edit-print", (p.favorite ? "★ " : "") + (p.printName || "Untitled print"), p.types || [])).join("")}
+        </div>
+      </details>`;
+  }).join("")}`;
 }
 
 function clothesView(prints) {
@@ -316,8 +324,8 @@ function clothesView(prints) {
   return `
     <div class="note">Prints ${esc(CONFIG.babyName)} already has, and the styles she has them in. A print she has as a zippy can still be a lovely dress!${og.length ? ` Faded prints are ones she's <b>outgrown</b>. She'd love those again in a bigger size.` : ""}</div>
     ${favoritesView(prints)}
-    ${og.length ? filterChips("fit", [["all", "All", prints.length], ["fits", "Fits now", prints.length - og.length], ["outgrown", "Outgrown", og.length]]) : ""}
-    ${shown.length ? printGroups(shown) : `<div class="empty">${prints.length ? "Nothing here." : "No clothes listed yet."}</div>`}`;
+    ${og.length ? filterChips("fit", [["all", "All", prints.length], ["fits", "Fits Now", prints.length - og.length], ["outgrown", "Outgrown", og.length]]) : ""}
+    ${shown.length ? printGroups(shown, { forceOpen: filter.fit !== "all" }) : `<div class="empty">${prints.length ? "Nothing here." : "No clothes listed yet."}</div>`}`;
 }
 
 function favoritesView(prints) {
@@ -325,13 +333,13 @@ function favoritesView(prints) {
   const favStyles = S.data.favoriteStyles || [];
   if (!favPrints.length && !favStyles.length) {
     return owner()
-      ? `<div class="favs empty-favs"><b>Her favorites</b><span class="muted">Tap a print and turn on ★ Favorite print, or </span><button class="link" data-act="edit-favstyles">pick favorite styles</button></div>`
+      ? `<div class="favs empty-favs"><b>Her Favorites</b><span class="muted">Tap a print and turn on ★ Favorite print, or </span><button class="link" data-act="edit-favstyles">pick favorite styles</button></div>`
       : "";
   }
   const hasStyle = (style) => prints.filter((p) => !p.outgrown && (p.types || []).some((t) => t.toLowerCase() === style.toLowerCase()));
   return `
     <section class="favs" aria-label="Her favorites">
-      <div class="favs-head"><h2>★ Her favorites</h2>${owner() ? `<button class="link" data-act="edit-favstyles">Edit styles</button>` : ""}</div>
+      <div class="favs-head"><h2>★ Her Favorites</h2>${owner() ? `<button class="link" data-act="edit-favstyles">Edit Styles</button>` : ""}</div>
       <p class="muted">Great gift ideas: a new style in a print she loves, or a style she loves in a print she doesn't have yet.</p>
       ${favPrints.map((p) => `
         <div class="fav-row">
@@ -359,7 +367,7 @@ function favoritesView(prints) {
 function favStylesSheet() {
   const current = S.data.favoriteStyles || [];
   openSheet(
-    `<h2>Favorite styles</h2>
+    `<h2>Favorite Styles</h2>
      <div class="label-row"><p class="muted" style="margin:0">Styles she loves. Gifters will see which prints she already has in each one.</p>${manageLink("clothes")}</div>
      <div class="type-picker" data-cat="clothes" role="group" aria-label="Favorite styles">${typePills("clothes", current)}</div>
      <div class="err sheet-err" hidden></div>
@@ -403,7 +411,7 @@ function sizesView() {
   return `
     <div class="note">Her current size in each brand. When shopping, get <b>this size or bigger</b>. She grows fast!</div>
     ${plansSection()}
-    <div class="section-title"><h2>Favorite brands</h2>${owner() ? `<button class="link" data-act="add-brand">+ Brand</button>` : ""}</div>
+    <div class="section-title"><h2>Favorite Brands</h2>${owner() ? `<button class="link" data-act="add-brand">+ Brand</button>` : ""}</div>
     ${bs.length
       ? bs.map((b) => `
       <div class="size-row">
@@ -412,7 +420,7 @@ function sizesView() {
         ${owner() ? `<button class="link" data-act="edit-brand" data-id="${b.id}">Edit</button>` : ""}
       </div>`).join("")
       : `<div class="empty">No brands yet.</div>`}
-    <div class="section-title"><h2>Her colors</h2>${owner() ? `<button class="link" data-act="edit-colors">Edit</button>` : ""}</div>
+    <div class="section-title"><h2>Her Colors</h2>${owner() ? `<button class="link" data-act="edit-colors">Edit</button>` : ""}</div>
     ${herColors().length
       ? `<div class="swatches">${herColors().map((c) => `<div class="swatch"><i style="background:${esc(c.hex)}"></i>${esc(c.name)}</div>`).join("")}</div>`
       : `<div class="empty">${owner() ? "No colors yet. Tap Edit to add some." : "No colors listed yet."}</div>`}`;
@@ -433,7 +441,7 @@ function colorsSheet() {
       <button class="icon-btn danger" data-m="remove" aria-label="Remove ${esc(c.name)}">×</button>
     </div>`;
   openSheet(
-    `<h2>Her colors</h2>
+    `<h2>Her Colors</h2>
      <p class="muted">Shown on the Sizes page so gifters know what she wears. Tap a circle to pick the shade.</p>
      <div class="color-list"></div>
      <button class="btn ghost small" data-m="add">+ Add color</button>
@@ -522,7 +530,7 @@ const photoTargets = () => list(S.data?.prints).filter((p) => p.url && !p.image)
 function photoButton() {
   const n = photoTargets().length;
   if (!n && !busy.has("photos")) return "";
-  return `<button class="link" data-act="find-photos" ${dis("photos")}>${busy.has("photos") ? photoProgress || "Finding…" : `Find photos (${n})`}</button>`;
+  return `<button class="link" data-act="find-photos" ${dis("photos")}>${busy.has("photos") ? photoProgress || "Finding…" : `Find Photos (${n})`}</button>`;
 }
 async function runFindPhotos() {
   if (busy.has("photos")) return;
@@ -587,14 +595,14 @@ function plansSection() {
   const plans = sortedPlans();
   if (!plans.length) {
     return owner()
-      ? `<section class="plans"><div class="section-title"><h2>Shopping ahead</h2></div>
+      ? `<section class="plans"><div class="section-title"><h2>Shopping Ahead</h2></div>
          <p class="muted">Gifts for later need bigger sizes. Add an occasion and list the style and size per brand.</p>
          <div class="filters">${Object.entries(PRESETS).map(([k, v]) => `<button class="filter" data-act="add-plan" data-preset="${k}">+ ${v}</button>`).join("")}</div></section>`
       : "";
   }
   const sel = plans.find((p) => p.id === filter.plan) || plans[0];
   return `<section class="plans">
-    <div class="section-title"><h2>Shopping ahead</h2>${owner() ? `<button class="link" data-act="add-plan">+ Occasion</button>` : ""}</div>
+    <div class="section-title"><h2>Shopping Ahead</h2>${owner() ? `<button class="link" data-act="add-plan">+ Occasion</button>` : ""}</div>
     ${plans.length > 1 ? `<div class="filters" role="group" aria-label="Occasion">${plans.map((p) => `<button class="filter" data-act="pick-plan" data-id="${p.id}" aria-pressed="${p.id === sel.id}">${esc(p.name)}</button>`).join("")}</div>` : ""}
     ${planCard(sel)}
   </section>`;
@@ -615,7 +623,7 @@ function planSheet(existing) {
       <button class="icon-btn danger" data-m="remove" aria-label="Remove line">×</button>
     </div>`;
   openSheet(
-    `<h2>${isNew ? "Add occasion" : "Edit occasion"}</h2>
+    `<h2>${isNew ? "Add Occasion" : "Edit Occasion"}</h2>
      <label class="f" for="pl-name">Occasion</label>
      <input class="in" id="pl-name" maxlength="30" list="dl-plan-names" value="${esc(plan.name)}" placeholder="Christmas" />
      <datalist id="dl-plan-names">${Object.values(PRESETS).map((v) => `<option value="${v}">`).join("")}</datalist>
@@ -692,22 +700,22 @@ function ideasView() {
   const sections = [];
 
   if (nextPlan) sections.push(`
-    <section class="idea"><div class="section-title"><h2>Shopping for ${esc(nextPlan.name)}?</h2><button class="link" data-act="go-tab" data-to="sizes">All occasions</button></div>
+    <section class="idea"><div class="section-title"><h2>Shopping for ${esc(nextPlan.name)}?</h2><button class="link" data-act="go-tab" data-to="sizes">All Occasions</button></div>
       <p class="muted">She'll have grown by then. Here's what to look for.</p>${planCard(nextPlan, { compact: true })}</section>`);
 
   if (ranked.length) sections.push(`
-    <section class="idea"><div class="section-title"><h2>On her wishlist</h2><button class="link" data-act="go-tab" data-to="wishlist">See all ${items.length}</button></div>
+    <section class="idea"><div class="section-title"><h2>On Her Wishlist</h2><button class="link" data-act="go-tab" data-to="wishlist">See All ${items.length}</button></div>
       <div class="mini-list">${ranked.slice(0, 6).map((i) => `
         <button class="mini" data-act="go-tab" data-to="wishlist">${img(i.image, "mini-img", i.title)}
           <span><b>${esc(i.title)}</b><small>${esc([i.brand, i.size].filter(Boolean).join(" · "))}${i.stock === "out" ? ` · <em class="warn-text">sold out online</em>` : ""}</small></span></button>`).join("")}</div></section>`);
 
   if (lovedOutgrown.length) sections.push(`
-    <section class="idea"><div class="section-title"><h2>Loved it, outgrew it</h2></div>
+    <section class="idea"><div class="section-title"><h2>Loved It, Outgrew It</h2></div>
       <p class="muted">Favorite prints she's outgrown. Any style in a bigger size is perfect.</p>
       <div class="grid">${lovedOutgrown.map((p) => tile({ ...p, outgrown: false, id: p.id }, "edit-print", p.printName, [], p.brand)).join("")}</div></section>`);
 
   if (lovedNow.length) sections.push(`
-    <section class="idea"><div class="section-title"><h2>Favorite prints, new styles</h2></div>
+    <section class="idea"><div class="section-title"><h2>Favorite Prints, New Styles</h2></div>
       <p class="muted">She loves these prints. Any style she doesn't have yet is welcome.</p>
       <div class="idea-rows">${lovedNow.map((p) => {
         const has = p.types || [];
@@ -717,7 +725,7 @@ function ideasView() {
       }).join("")}</div></section>`);
 
   if (favStyles.length) sections.push(`
-    <section class="idea"><div class="section-title"><h2>Favorite styles, new prints</h2></div>
+    <section class="idea"><div class="section-title"><h2>Favorite Styles, New Prints</h2></div>
       <div class="idea-rows">${favStyles.map((st) => {
         const n = prints.filter((p) => !p.outgrown && (p.types || []).some((t) => lc(t) === lc(st))).length;
         return `<div class="idea-row"><span class="fav-style">${esc(st)}</span><div class="small">Any print she doesn't have yet.${n ? ` She has ${n} that fit now, so search her closet first.` : ""}</div></div>`;
@@ -972,9 +980,9 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
   const isEdit = !!existing;
   const opts = (values, current) => [...new Set([...(current ? [current] : []), ...values])]
     .map((t) => `<option ${current === t ? "selected" : ""}>${esc(t)}</option>`).join("");
-  const title = { wc: "Edit wish", wt: "Edit wish", cc: "Edit print", ct: "Edit toy" };
+  const title = { wc: "Edit Wish", wt: "Edit Wish", wo: "Edit Wish", cc: "Edit Print", ct: "Edit Toy", co: "Edit Item" };
   const html = `
-    <h2>${isEdit ? title[dest[0] + cat[0]] : "Add something"}</h2>
+    <h2>${isEdit ? title[dest[0] + cat[0]] : "Add Something"}</h2>
     ${isEdit ? "" : `
       <div class="seg"><button type="button" data-dest="wishlist" aria-pressed="${dest === "wishlist"}">Wishlist</button><button type="button" data-dest="closet" aria-pressed="${dest === "closet"}">She has it</button></div>
       <div class="seg"><button type="button" data-cat="clothes" aria-pressed="${cat === "clothes"}">Clothes</button><button type="button" data-cat="toy" aria-pressed="${cat === "toy"}">Toy</button><button type="button" data-cat="other" aria-pressed="${cat === "other"}">Other</button></div>`}
@@ -1140,7 +1148,7 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
 function brandSheet(existing = null) {
   const b = existing || {};
   openSheet(
-    `<h2>${existing ? "Edit brand" : "Add brand"}</h2>
+    `<h2>${existing ? "Edit Brand" : "Add Brand"}</h2>
      <label class="f" for="b-name">Brand</label><input class="in" id="b-name" name="name" maxlength="60" value="${esc(b.name || "")}" placeholder="Little Sleepies" />
      <label class="f" for="b-size">Current size</label><input class="in" id="b-size" name="currentSize" maxlength="20" list="dl-sizes" value="${esc(b.currentSize || "")}" placeholder="6–12M" />
      <label class="f" for="b-notes">Sizing note (optional)</label><input class="in" id="b-notes" name="notes" maxlength="140" value="${esc(b.notes || "")}" placeholder="Runs small, size up" />
@@ -1179,8 +1187,8 @@ function parseImport(text) {
 }
 function importSheet() {
   openSheet(
-    `<h2>Import list</h2>
-     <p class="muted">On the review page Claude made, tap <b>Copy for closet</b>, then paste here. Prints she already has get the new styles added. Nothing is duplicated.</p>
+    `<h2>Import List</h2>
+     <p class="muted">On the review page Claude made, tap <b>Copy for Closet</b>, then paste here. Prints she already has get the new styles added. Nothing is duplicated.</p>
      <textarea class="in" id="imp-text" rows="6" placeholder="Paste here" aria-label="Import list"></textarea>
      <p class="muted" id="imp-sum" aria-live="polite"></p>
      <div class="err sheet-err" hidden></div>
@@ -1229,6 +1237,10 @@ $app.addEventListener("input", (ev) => {
   const out = document.getElementById("closet-results");
   if (out) out.innerHTML = closetResults();
 });
+$app.addEventListener("toggle", (ev) => { // remember which brands are open across re-renders
+  const d = ev.target;
+  if (d.classList?.contains("brand-fold")) { if (d.open) openBrands.add(d.dataset.brand); else openBrands.delete(d.dataset.brand); }
+}, true);
 $app.addEventListener("keydown", (ev) => {
   if (ev.target.id === "closet-search" && ev.key === "Enter") ev.target.blur(); // closes the phone keyboard
 });
@@ -1270,6 +1282,9 @@ $app.addEventListener("click", (ev) => {
     case "go-tab": tab = t.dataset.to; history.replaceState(null, "", `${location.search}#${tab}`); render(); window.scrollTo({ top: 0 });
       if (t.dataset.focus) document.getElementById(t.dataset.focus)?.focus(); return;
     case "share": return shareSheet();
+    case "fold-all":
+      for (const d of document.querySelectorAll(".brand-fold")) { d.open = t.dataset.open === "1"; if (d.open) openBrands.add(d.dataset.brand); else openBrands.delete(d.dataset.brand); }
+      return;
     case "force-update": return forceUpdate();
     case "edit-favstyles": return favStylesSheet();
     case "edit-brand": return brandSheet(S.data.brands[id]);
