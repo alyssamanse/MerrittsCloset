@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1004-1054";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-1054";
-const BUILD = "1004-1054"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1004-1107";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-1107";
+const BUILD = "1004-1107"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = ["wishlist", "closet", "sizes"];
@@ -282,18 +282,24 @@ function closetView() {
     <div id="closet-results">${closetResults()}</div>`;
 }
 
-// Outgrown prints from brands that aren't her favorites aren't shown to guests (no one needs
-// to rebuy those). The owner still sees them, marked "Hidden", so they can be managed.
-const hiddenFromGuests = (p) => !!p.outgrown && !brandByName(p.brand);
+// Anyone can hide outgrown prints from brands that aren't her favorites. Outgrown prints in
+// her favorite brands always show. The choice is remembered on this device.
+const otherOutgrown = (p) => !!p.outgrown && !brandByName(p.brand);
+let showOtherOutgrown = true;
+try { showOtherOutgrown = localStorage.getItem("closet:hideOtherOutgrown") !== "1"; } catch {}
 function closetResults() {
-  const prints = list(S.data.prints).filter((p) => owner() || !hiddenFromGuests(p));
+  const allPrints = list(S.data.prints);
+  const otherOg = allPrints.filter(otherOutgrown).length;
+  const prints = allPrints.filter((p) => showOtherOutgrown || !otherOutgrown(p));
   const things = list(S.data.toys);
   const toys = things.filter((t) => hasCat(t) === "toy");
   const others = things.filter((t) => hasCat(t) === "other");
   const q = closetQuery.trim();
+  const ogToggle = otherOg ? `<label class="og-toggle"><input type="checkbox" id="og-toggle" ${showOtherOutgrown ? "checked" : ""}> Show outgrown prints from other brands <span class="muted">(${otherOg})</span></label>` : "";
   if (!q) {
     return `
     ${filterChips("closet", [["clothes", "Clothes", prints.length], ["toys", "Toys", toys.length], ["other", "Other", others.length]])}
+    ${filter.closet === "clothes" ? ogToggle : ""}
     ${filter.closet === "toys" ? thingsView(toys, "toy") : filter.closet === "other" ? thingsView(others, "other") : clothesView(prints)}`;
   }
   // Searching looks across clothes, toys and other things at once.
@@ -305,6 +311,7 @@ function closetResults() {
   const thingGrid = (arr) => `<div class="grid toys">${arr.sort((a, b) => a.name.localeCompare(b.name)).map((t) => tile(t, "edit-toy", t.name, [t.type].filter(Boolean), t.brand)).join("")}</div>`;
   return `
     <p class="muted result-count">${n} ${n === 1 ? "match" : "matches"} for “${esc(q)}”</p>
+    ${ogToggle}
     ${mp.length ? printGroups(mp, { forceOpen: true }) : ""}
     ${mt.length ? `<div class="brand-head"><h2>Toys</h2></div>${thingGrid(mt)}` : ""}
     ${mo.length ? `<div class="brand-head"><h2>Other Things</h2></div>${thingGrid(mo)}` : ""}`;
@@ -430,7 +437,7 @@ function thingsView(things, cat) {
 
 function tile(rec, editAct, title, pills, sub = "") {
   const og = !!rec.outgrown;
-  const allPills = [...(og ? [`<i class="pill og">Outgrown</i>`] : []), ...(og && owner() && editAct === "edit-print" && hiddenFromGuests(rec) ? [`<i class="pill hid" title="Outgrown and not a favorite brand, so guests don't see it">Hidden</i>`] : []), ...pills.map((t) => `<i class="pill">${esc(t)}</i>`)];
+  const allPills = [...(og ? [`<i class="pill og">Outgrown</i>`] : []), ...pills.map((t) => `<i class="pill">${esc(t)}</i>`)];
   const caption = `<span>${esc(title)}${sub ? `<small>${esc(sub)}</small>` : ""}${allPills.length ? `<b class="pills">${allPills.join("")}</b>` : ""}</span>`;
   const cls = `print${og ? " outgrown" : ""}`;
   const label = og ? ` aria-label="${esc(title)}, outgrown"` : "";
@@ -1285,6 +1292,13 @@ $app.addEventListener("input", (ev) => {
   }
   if (ev.target.id !== "closet-search") return;
   closetQuery = ev.target.value.slice(0, 60);
+  const out = document.getElementById("closet-results");
+  if (out) out.innerHTML = closetResults();
+});
+$app.addEventListener("change", (ev) => {
+  if (ev.target.id !== "og-toggle") return;
+  showOtherOutgrown = ev.target.checked;
+  try { localStorage.setItem("closet:hideOtherOutgrown", showOtherOutgrown ? "0" : "1"); } catch {}
   const out = document.getElementById("closet-results");
   if (out) out.innerHTML = closetResults();
 });
