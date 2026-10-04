@@ -726,7 +726,7 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
       if (m === "cc") {
         if (!v("printName") && !common.brand) throw new Error("Add at least a brand or a print name.");
         const types = [...el.querySelectorAll('.type-opt[aria-pressed="true"]')].map((b) => b.dataset.type);
-        await store.upsertPrint({ ...common, printName: v("printName"), types, favorite: f("favorite").checked, outgrown: f("outgrown").checked });
+        await store.upsertPrint({ ...common, printName: v("printName"), types, favorite: f("favorite").checked, ...(f("outgrown").checked && { outgrown: true }) }); // omitted = not outgrown
       } else if (m === "ct" || m === "co") {
         if (!v("title")) throw new Error("Give it a name.");
         await store.upsertToy({ ...common, category: cat, name: v("title"), type: f(cat === "toy" ? "toyType" : "otherType").value });
