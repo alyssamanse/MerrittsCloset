@@ -208,6 +208,9 @@ export async function createFirebaseStore() {
     upsertToy: (toy) => mutate("upsertToy", { toy }),
     deleteToy: (id) => mutate("deleteToy", { id }),
     setFavoriteStyles: (styles) => mutate("setFavoriteStyles", { styles }),
+    addType: (category, name) => mutate("addType", { category, name }),
+    renameType: (category, from, to) => mutate("renameType", { category, from, to }),
+    deleteType: (category, name) => mutate("deleteType", { category, name }),
     upsertBrand: (brand) => mutate("upsertBrand", { brand }),
     deleteBrand: (id) => mutate("deleteBrand", { id }),
     async importLink(url) { return (await call("import", { url })).product; },
@@ -256,6 +259,13 @@ export function createDemoStore() {
     claims: { i2: { h: "someone-else", at: now } },
   };
   const mine = new Set(["i3"]);
+  data.typeLists = {};
+  const DEMO_DEFAULTS = {
+    clothes: ["Zippy", "Footie", "Romper", "Bodysuit", "Two-piece", "Pajamas", "Dress", "Bubble", "Swaddle", "Sleep bag", "Blanket", "Bib", "Hat", "Bow", "Shoes"],
+    toy: ["Rattle", "Teether", "Stacker", "Blocks", "Book", "Plush", "Bath", "Music", "Activity", "Push & ride", "Puzzle", "Pretend play", "Outdoor"],
+    other: ["Blanket", "Swaddle", "Lovey", "Bedding", "Bath", "Feeding", "Books", "Room decor", "Gear", "Keepsake"],
+  };
+  const demoList = (cat) => [...(data.typeLists[cat] || DEMO_DEFAULTS[cat])];
   data.claims.i3 = { h: "mine", at: now };
   let user = null;
   let notify = () => {};
@@ -297,6 +307,19 @@ export function createDemoStore() {
     upsertToy: m((t) => { data.toys[t.id] = t; }),
     deleteToy: m((id) => { delete data.toys[id]; }),
     setFavoriteStyles: m((styles) => { data.favoriteStyles = styles; }),
+    // Demo copies of the server's style-list actions (defaults come from app.js via the first edit).
+    addType: m((cat, name) => { data.typeLists[cat] = [...demoList(cat), name]; }),
+    renameType: m((cat, from, to) => {
+      const eq = (v) => (v || "").toLowerCase() === from.toLowerCase();
+      if (demoList(cat).some((t, i) => t.toLowerCase() === to.toLowerCase() && !eq(t))) throw new FriendlyError(`"${to}" is already in the list`);
+      data.typeLists[cat] = demoList(cat).map((t) => (eq(t) ? to : t));
+      for (const it of Object.values(data.items)) if ((it.category || "clothes") === cat && eq(it.type)) it.type = to;
+      if (cat === "clothes") {
+        for (const p of Object.values(data.prints)) if (p.types) p.types = p.types.map((t) => (eq(t) ? to : t));
+        data.favoriteStyles = (data.favoriteStyles || []).map((t) => (eq(t) ? to : t));
+      } else for (const t of Object.values(data.toys)) if ((t.category || "toy") === cat && eq(t.type)) t.type = to;
+    }),
+    deleteType: m((cat, name) => { data.typeLists[cat] = demoList(cat).filter((t) => t.toLowerCase() !== name.toLowerCase()); }),
     upsertBrand: m((b) => { data.brands[b.id] = b; }),
     deleteBrand: m((id) => { delete data.brands[id]; }),
     async importLink(url) {

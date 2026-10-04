@@ -5,34 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Merritt's Closet</title>
 <meta name="theme-color" content="#EBD6D3" />
+<meta name="color-scheme" content="light" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,500..700,100&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
 <style>
-  /* Beige ground, dusty rose primary, sage accents. Hero keeps the
-     wallpaper's fine stripes and dots. */
+  /* Beige ground, dusty rose primary, sage accents. One light look on every
+     device, including phones set to dark mode. */
   :root {
     --paper: #F6F0E7; --surface: #FFFCF8; --blush: #EBD6D3; --blush-2: #DDBDB9;
     --rose: #9E5D63; --rose-lt: #F4E6E4; --cocoa: #8E5A60; --hazel: #D8C7B1;
     --taupe: #857B77; --moss: #5F7A5E; --moss-lt: #E2EADD; --ink: #463E3F;
     --line: #E7DDD3; --dot: rgba(255,255,255,.75); --stripe: rgba(255,255,255,.35);
-    --shadow: 0 1px 2px rgba(70,62,63,.06), 0 4px 14px rgba(70,62,63,.06); --on-rose: #FFFFFF;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --paper: #1E1B1A; --surface: #282423; --blush: #3F3031; --blush-2: #533D3F;
-      --rose: #E0A3A8; --rose-lt: #372A2B; --cocoa: #E0A3A8; --hazel: #8C7A68;
-      --taupe: #B3A9A4; --moss: #A9C0A3; --moss-lt: #2A3328; --ink: #F1EAE6;
-      --line: #3A3331; --dot: rgba(255,255,255,.10); --stripe: rgba(255,255,255,.04);
-      --shadow: 0 1px 2px rgba(0,0,0,.3); --on-rose: #241E1E; color-scheme: dark;
-    }
-  }
-  :root[data-theme="dark"] {
-    --paper: #1E1B1A; --surface: #282423; --blush: #3F3031; --blush-2: #533D3F;
-    --rose: #E0A3A8; --rose-lt: #372A2B; --cocoa: #E0A3A8; --hazel: #8C7A68;
-    --taupe: #B3A9A4; --moss: #A9C0A3; --moss-lt: #2A3328; --ink: #F1EAE6;
-    --line: #3A3331; --dot: rgba(255,255,255,.10); --stripe: rgba(255,255,255,.04);
-    --shadow: 0 1px 2px rgba(0,0,0,.3); --on-rose: #241E1E; color-scheme: dark;
+    --shadow: 0 1px 2px rgba(70,62,63,.06), 0 4px 14px rgba(70,62,63,.06); --on-rose: #FFFFFF; color-scheme: light;
   }
 
   * { box-sizing: border-box; }
@@ -123,6 +108,18 @@
   .fav-line { font-size: 14px; color: var(--ink); margin-top: 2px; }
   .admin-card { background: var(--surface); border: 1.5px dashed var(--blush-2); border-radius: 18px; padding: 16px; margin-bottom: 18px; display: grid; gap: 8px; justify-items: start; }
   .admin-card p { margin: 0; }
+  .label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .link.manage { font-size: 13px; padding: 12px 2px 4px; }
+  .modal-bg { position: fixed; inset: 0; z-index: 40; background: rgba(40,32,32,.42); display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .modal { background: var(--paper); border-radius: 20px; padding: 18px 16px 16px; width: 100%; max-width: 420px; max-height: 86vh; overflow: auto; box-shadow: 0 12px 40px rgba(40,32,32,.25); }
+  .modal h3 { font-size: 20px; margin-bottom: 4px; }
+  .modal p { margin: 0 0 10px; }
+  .type-list { display: grid; gap: 2px; margin: 6px 0 12px; }
+  .type-row { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
+  .type-row span { flex: 1; font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+  .type-row.editing .in { flex: 1; padding: 8px 10px; }
+  .add-row { display: flex; gap: 8px; } .add-row .in { flex: 1; min-width: 0; }
+  .danger-btn { background: #A8423A; color: #fff; }
   .pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; font-weight: 700; }
   .pill { font-style: normal; font-size: 10.5px; letter-spacing: .02em; padding: 2px 7px; border-radius: 999px; background: var(--moss-lt); color: var(--moss); }
   .type-picker { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -167,7 +164,6 @@
   .sheet-actions { display: flex; gap: 10px; margin-top: 20px; align-items: center; }
   .sheet-actions .spacer { flex: 1; }
   .danger { color: #B3423A; }
-  :root[data-theme="dark"] .danger { color: #F0948A; }
   .err { color: #B3423A; font-size: 14px; font-weight: 700; margin-top: 8px; }
 
   .toast { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 999px; font-weight: 700; font-size: 14px; z-index: 30; box-shadow: var(--shadow); width: max-content; max-width: calc(100vw - 32px); text-align: center; }

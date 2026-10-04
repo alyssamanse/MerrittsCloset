@@ -6,6 +6,9 @@ const TABS = ["wishlist", "closet", "sizes"];
 const OTHER_TYPES = ["Blanket", "Swaddle", "Lovey", "Bedding", "Bath", "Feeding", "Books", "Room decor", "Gear", "Keepsake"];
 const TOY_TYPES = ["Rattle", "Teether", "Stacker", "Blocks", "Book", "Plush", "Bath", "Music", "Activity", "Push & ride", "Puzzle", "Pretend play", "Outdoor"];
 const TYPES = ["Zippy", "Footie", "Romper", "Bodysuit", "Two-piece", "Pajamas", "Dress", "Bubble", "Swaddle", "Sleep bag", "Blanket", "Bib", "Hat", "Bow", "Shoes"];
+// Default choices; once the owner edits a list it's stored with the wishlist (typeLists).
+const DEFAULT_TYPES = { clothes: TYPES, toy: TOY_TYPES, other: OTHER_TYPES };
+const LIST_LABEL = { clothes: "clothing styles", toy: "kinds of toy", other: "kinds of other things" };
 const isDemo = new URLSearchParams(location.search).has("demo") || window.CLOSET_DEMO === true;
 const $app = document.getElementById("app");
 // Owner sign-in lives only at the hidden address …/?admin (or …/#admin). Guests never see a
@@ -281,18 +284,12 @@ function favStylesSheet() {
   const current = S.data.favoriteStyles || [];
   openSheet(
     `<h2>Favorite styles</h2>
-     <p class="muted">Styles she loves. Gifters will see which prints she already has in each one.</p>
-     <div class="type-picker" role="group" aria-label="Favorite styles">
-       ${[...new Set([...current, ...TYPES])].map((t) => `<button type="button" class="type-opt" aria-pressed="${current.includes(t)}" data-type="${esc(t)}">${esc(t)}</button>`).join("")}
-     </div>
+     <div class="label-row"><p class="muted" style="margin:0">Styles she loves. Gifters will see which prints she already has in each one.</p>${manageLink("clothes")}</div>
+     <div class="type-picker" data-cat="clothes" role="group" aria-label="Favorite styles">${typePills("clothes", current)}</div>
      <div class="err sheet-err" hidden></div>
      <div class="sheet-actions"><span class="spacer"></span><button class="btn ghost" data-act="cancel">Cancel</button><button class="btn" data-act="save">Save</button></div>`,
     (el) => {
-      el.querySelectorAll(".type-opt").forEach((b) => b.addEventListener("click", () => {
-        const on = b.getAttribute("aria-pressed") !== "true";
-        if (on && el.querySelectorAll('.type-opt[aria-pressed="true"]').length >= 8) return toast("Up to 8 favorite styles");
-        b.setAttribute("aria-pressed", on);
-      }));
+      wireTypeControls(el, "Up to 8 favorite styles");
       el.querySelector('[data-act="cancel"]').addEventListener("click", () => closeSheet());
       wireSave(el, async () => {
         await store.setFavoriteStyles([...el.querySelectorAll('.type-opt[aria-pressed="true"]')].map((b) => b.dataset.type));
@@ -341,6 +338,149 @@ function sizesView() {
 }
 
 // ── sheets (add / edit) ──────────────────────────────────────────────
+// ── style-type choices: shared controls + the Manage window ─────────
+const typesFor = (cat) => S.data?.typeLists?.[cat] || DEFAULT_TYPES[cat];
+const manageLink = (cat) => `<button type="button" class="link manage" data-manage="${cat}">Manage</button>`;
+const typeOptions = (cat, current) => `<option value="">Choose…</option>` +
+  [...new Set([...(current ? [current] : []), ...typesFor(cat)])].map((t) => `<option ${current === t ? "selected" : ""}>${esc(t)}</option>`).join("");
+const typePills = (cat, selected) =>
+  [...new Set([...selected, ...typesFor(cat)])].map((t) => `<button type="button" class="type-opt" aria-pressed="${selected.includes(t)}" data-type="${esc(t)}">${esc(t)}</button>`).join("");
+
+// Pill toggling + "Manage" links inside a sheet (delegated, so redrawn pills keep working).
+function wireTypeControls(el, limitMsg) {
+  el.addEventListener("click", (ev) => {
+    const pill = ev.target.closest(".type-opt");
+    if (pill) {
+      const on = pill.getAttribute("aria-pressed") !== "true";
+      if (on && pill.parentElement.querySelectorAll('[aria-pressed="true"]').length >= 8) return toast(limitMsg);
+      pill.setAttribute("aria-pressed", on);
+      return;
+    }
+    const m = ev.target.closest("[data-manage]");
+    if (m) manageTypesModal(m.dataset.manage, (renames) => refreshTypeControls(el, renames));
+  });
+}
+
+// Redraw the form's choices after the lists change, keeping what was picked (following renames).
+function refreshTypeControls(el, renames) {
+  const follow = (v) => renames.get((v || "").toLowerCase()) ?? v;
+  for (const [sel, cat] of [["#f-type", "clothes"], ["#f-toytype", "toy"], ["#f-othertype", "other"]]) {
+    const s = el.querySelector(sel);
+    if (!s) continue;
+    const cur = follow(s.value);
+    s.innerHTML = typeOptions(cat, cur);
+    s.value = cur;
+  }
+  el.querySelectorAll(".type-picker[data-cat]").forEach((p) => {
+    const picked = [...p.querySelectorAll('[aria-pressed="true"]')].map((b) => follow(b.dataset.type));
+    p.innerHTML = typePills(p.dataset.cat, picked);
+  });
+}
+
+function typeUsage(cat, name) {
+  const n = name.toLowerCase();
+  const eq = (v) => (v || "").toLowerCase() === n;
+  let count = list(S.data?.items).filter((i) => catOf(i) === cat && eq(i.type)).length;
+  if (cat === "clothes") count += list(S.data?.prints).filter((p) => (p.types || []).some(eq)).length;
+  else count += list(S.data?.toys).filter((t) => hasCat(t) === cat && eq(t.type)).length;
+  return count;
+}
+
+// Small windows that sit on top of an open form without disturbing it.
+function openModal(html) {
+  const bg = document.createElement("div");
+  bg.className = "modal-bg";
+  bg.innerHTML = `<div class="modal" role="dialog" aria-modal="true">${html}</div>`;
+  document.body.appendChild(bg);
+  return bg;
+}
+function confirmModal({ title, message, confirmLabel }) {
+  return new Promise((resolve) => {
+    const bg = openModal(`<h3>${esc(title)}</h3><p class="muted">${message}</p>
+      <div class="sheet-actions"><span class="spacer"></span><button class="btn ghost" data-r="no">Cancel</button><button class="btn danger-btn" data-r="yes">${esc(confirmLabel)}</button></div>`);
+    bg.addEventListener("click", (ev) => {
+      const b = ev.target.closest("[data-r]");
+      if (!b && ev.target !== bg) return;
+      bg.remove();
+      resolve(b?.dataset.r === "yes");
+    });
+    bg.querySelector('[data-r="no"]').focus();
+  });
+}
+
+function manageTypesModal(cat, onDone) {
+  const renames = new Map();            // old name (lowercase) → new name, for the open form
+  let editing = null;                   // name being renamed
+  let working = false;
+  const bg = openModal(`<h3>Manage ${LIST_LABEL[cat]}</h3>
+    <p class="muted">These are the choices in the form. Renaming also updates everything already tagged with it.</p>
+    <div class="type-list"></div>
+    <div class="add-row"><input class="in" id="new-type" maxlength="24" placeholder="Add a new one" aria-label="New choice" /><button class="btn small" data-m="add">Add</button></div>
+    <div class="err" hidden></div>
+    <div class="sheet-actions"><span class="spacer"></span><button class="btn" data-m="done">Done</button></div>`);
+  const $list = bg.querySelector(".type-list");
+  const $err = bg.querySelector(".err");
+  const draw = () => {
+    $list.innerHTML = typesFor(cat).map((t) => editing === t
+      ? `<div class="type-row editing"><input class="in" id="rename-input" maxlength="24" value="${esc(t)}" aria-label="New name for ${esc(t)}" />
+           <button class="btn small" data-m="save-rename" ${working ? "disabled" : ""}>Save</button><button class="link" data-m="cancel-rename">Cancel</button></div>`
+      : `<div class="type-row" data-name="${esc(t)}"><span>${esc(t)}</span>
+           <button class="link" data-m="rename" ${working ? "disabled" : ""}>Rename</button>
+           <button class="link danger" data-m="delete" ${working ? "disabled" : ""}>Delete</button></div>`).join("")
+      || `<p class="muted">No choices yet. Add one below.</p>`;
+    bg.querySelector('[data-m="add"]').disabled = working;
+    bg.querySelector("#rename-input")?.focus();
+  };
+  const run = async (fn) => {
+    working = true; $err.hidden = true; draw();
+    try { await fn(); } catch (e) { $err.textContent = e?.message || "That didn't save. Try again."; $err.hidden = false; }
+    finally { working = false; draw(); }
+  };
+  const close = () => { bg.remove(); onDone?.(renames); };
+  draw();
+
+  bg.addEventListener("click", async (ev) => {
+    if (ev.target === bg) return close();
+    const b = ev.target.closest("[data-m]");
+    if (!b || b.disabled) return;
+    const name = b.closest(".type-row")?.dataset.name;
+    switch (b.dataset.m) {
+      case "done": return close();
+      case "add": {
+        const input = bg.querySelector("#new-type");
+        const v = input.value.trim();
+        if (!v) return;
+        if (typesFor(cat).some((t) => t.toLowerCase() === v.toLowerCase())) { $err.textContent = `"${v}" is already in the list.`; $err.hidden = false; return; }
+        return run(async () => { await store.addType(cat, v); input.value = ""; });
+      }
+      case "rename": editing = name; return draw();
+      case "cancel-rename": editing = null; return draw();
+      case "save-rename": {
+        const from = editing;
+        const to = bg.querySelector("#rename-input").value.trim();
+        if (!to || to === from) { editing = null; return draw(); }
+        return run(async () => {
+          await store.renameType(cat, from, to);
+          for (const [k, v] of renames) if (v.toLowerCase() === from.toLowerCase()) renames.set(k, to);
+          renames.set(from.toLowerCase(), to);
+          editing = null;
+        });
+      }
+      case "delete": {
+        const used = typeUsage(cat, name);
+        const ok = await confirmModal({
+          title: `Delete "${name}"?`,
+          message: `It will no longer be a choice in the form.${used ? ` ${used} thing${used === 1 ? "" : "s"} already tagged "${esc(name)}" will keep that label.` : ""}`,
+          confirmLabel: "Delete",
+        });
+        if (ok) return run(() => store.deleteType(cat, name));
+      }
+    }
+  });
+  bg.querySelector("#new-type").addEventListener("keydown", (ev) => { if (ev.key === "Enter") bg.querySelector('[data-m="add"]').click(); });
+  bg.addEventListener("keydown", (ev) => { if (ev.key === "Enter" && ev.target.id === "rename-input") bg.querySelector('[data-m="save-rename"]').click(); });
+}
+
 function openSheet(html, onMount) {
   closeSheet(false);
   const bg = document.createElement("div");
@@ -381,14 +521,10 @@ function wireSave(el, save) {
 function wireDelete(el, fn) {
   const btn = el.querySelector('[data-act="delete"]');
   if (!btn) return;
-  let armedAt = 0;
   btn.addEventListener("click", async () => {
     if (btn.disabled) return;
-    if (Date.now() - armedAt > 3000) {
-      armedAt = Date.now(); btn.textContent = "Tap again to delete";
-      setTimeout(() => { if (!btn.disabled) btn.textContent = "Delete"; }, 3000);
-      return;
-    }
+    const ok = await confirmModal({ title: "Delete this?", message: "It will be removed for good.", confirmLabel: "Delete" });
+    if (!ok) return;
     btn.disabled = true; btn.textContent = "Deleting…";
     try { await fn(); closeSheet(); toast("Deleted"); }
     catch (e) {
@@ -430,23 +566,21 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
       <div data-show="wc cc"><label class="f" for="f-print">Print</label><input class="in" id="f-print" name="printName" maxlength="80" value="${esc(e.printName || "")}" placeholder="Strawberry" /></div>
     </div>
     <div data-show="wc">
-      <label class="f" for="f-type">Type</label>
-      <select class="in" id="f-type" name="type"><option value="">Choose…</option>${opts(TYPES, cat === "clothes" ? e.type : "")}</select>
+      <div class="label-row"><label class="f" for="f-type">Type</label>${manageLink("clothes")}</div>
+      <select class="in" id="f-type" name="type">${typeOptions("clothes", cat === "clothes" ? e.type : "")}</select>
     </div>
     <div data-show="wt ct">
-      <label class="f" for="f-toytype">Kind of toy</label>
-      <select class="in" id="f-toytype" name="toyType"><option value="">Choose…</option>${opts(TOY_TYPES, cat === "toy" ? e.type : "")}</select>
+      <div class="label-row"><label class="f" for="f-toytype">Kind of toy</label>${manageLink("toy")}</div>
+      <select class="in" id="f-toytype" name="toyType">${typeOptions("toy", cat === "toy" ? e.type : "")}</select>
     </div>
     <div data-show="wo co">
-      <label class="f" for="f-othertype">What kind</label>
-      <select class="in" id="f-othertype" name="otherType"><option value="">Choose…</option>${opts(OTHER_TYPES, cat === "other" ? e.type : "")}</select>
+      <div class="label-row"><label class="f" for="f-othertype">What kind</label>${manageLink("other")}</div>
+      <select class="in" id="f-othertype" name="otherType">${typeOptions("other", cat === "other" ? e.type : "")}</select>
     </div>
     <div data-show="cc">
       <label class="check"><input type="checkbox" id="f-fav" name="favorite" ${e.favorite ? "checked" : ""}> ★ Favorite print</label>
-      <label class="f">Styles she has in this print</label>
-      <div class="type-picker" role="group" aria-label="Styles she has">
-        ${[...new Set([...(e.types || []), ...TYPES])].map((t) => `<button type="button" class="type-opt" aria-pressed="${(e.types || []).includes(t)}" data-type="${esc(t)}">${esc(t)}</button>`).join("")}
-      </div>
+      <div class="label-row"><label class="f">Styles she has in this print</label>${manageLink("clothes")}</div>
+      <div class="type-picker" data-cat="clothes" role="group" aria-label="Styles she has">${typePills("clothes", e.types || [])}</div>
     </div>
     <div class="row" data-show="wc wt wo">
       <div data-show="wc"><label class="f" for="f-size">Size</label><input class="in" id="f-size" name="size" maxlength="20" list="dl-sizes" value="${esc(e.size || "")}" placeholder="12–18M" /></div>
@@ -496,11 +630,7 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
         apply();
       }));
     }
-    el.querySelectorAll(".type-opt").forEach((b) => b.addEventListener("click", () => {
-      const on = b.getAttribute("aria-pressed") !== "true";
-      if (on && el.querySelectorAll('.type-opt[aria-pressed="true"]').length >= 8) return toast("Up to 8 styles per print");
-      b.setAttribute("aria-pressed", on);
-    }));
+    wireTypeControls(el, "Up to 8 styles per print");
     f("image").addEventListener("change", () => (el.querySelector("#pv").src = safeUrl(f("image").value) || PLACEHOLDER));
     f("brand").addEventListener("change", () => {
       const b = brandByName(f("brand").value);
