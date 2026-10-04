@@ -5,7 +5,7 @@ const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9
 const TABS = ["wishlist", "closet", "sizes"];
 const OTHER_TYPES = ["Blanket", "Swaddle", "Lovey", "Bedding", "Bath", "Feeding", "Books", "Room decor", "Gear", "Keepsake"];
 const TOY_TYPES = ["Rattle", "Teether", "Stacker", "Blocks", "Book", "Plush", "Bath", "Music", "Activity", "Push & ride", "Puzzle", "Pretend play", "Outdoor"];
-const TYPES = ["Zippy", "Footie", "Romper", "Bodysuit", "Two-piece", "Pajamas", "Dress", "Bubble", "Swaddle", "Sleep bag", "Blanket", "Bib", "Hat", "Bow", "Shoes"];
+const TYPES = ["Zippy", "Shorty", "Footie", "Romper", "Bodysuit", "Two-piece PJs", "Two-piece daywear", "Pajamas", "Dress", "Bubble", "Swim", "Outerwear", "Separates", "Swaddle", "Sleep bag", "Blanket", "Bib", "Hat", "Bow", "Shoes", "Accessory"];
 // Default choices; once the owner edits a list it's stored with the wishlist (typeLists).
 const DEFAULT_TYPES = { clothes: TYPES, toy: TOY_TYPES, other: OTHER_TYPES };
 const LIST_LABEL = { clothes: "clothing styles", toy: "kinds of toy", other: "kinds of other things" };

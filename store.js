@@ -237,7 +237,7 @@ export function createDemoStore() {
     },
     items: {
       i1: { id: "i1", title: "Zippered Footie", printName: "Strawberry Patch", type: "Footie", brand: "Kyte Baby", size: "12–18M", price: "$38", priority: "most", image: img("#F3D3CF", "#C9787A"), url: "", sizeFlexible: true, createdAt: now },
-      i2: { id: "i2", title: "Bamboo Two-Piece Set", printName: "Woodland Friends", type: "Two-piece", brand: "Little Sleepies", size: "12–18M", price: "$36", priority: "nice", image: img("#E5E6D2", "#8E9A6F"), url: "", printFlexible: true, createdAt: now },
+      i2: { id: "i2", title: "Bamboo Two-Piece Set", printName: "Woodland Friends", type: "Two-piece PJs", brand: "Little Sleepies", size: "12–18M", price: "$36", priority: "nice", image: img("#E5E6D2", "#8E9A6F"), url: "", printFlexible: true, createdAt: now },
       i4: { id: "i4", category: "toy", title: "Silicone Stacking Cups", brand: "Mushie", type: "Stacker", ageRange: "6m+", price: "$16", priority: "most", image: img("#E8EBDA", "#A7B8A0"), url: "", createdAt: now },
       i5: { id: "i5", category: "toy", title: "Board Book Set", brand: "Usborne", type: "Book", ageRange: "0–2y", price: "$24", priority: "nice", image: img("#F6DCD8", "#C48E93"), url: "", createdAt: now },
       i6: { id: "i6", category: "other", title: "Knit Stroller Blanket", brand: "Quincy Mae", type: "Blanket", price: "$58", priority: "nice", image: img("#EBD6D3", "#D4AEAA"), url: "", createdAt: now },
@@ -256,13 +256,13 @@ export function createDemoStore() {
       o1: { id: "o1", category: "other", name: "Muslin Swaddle Set", brand: "Aden + Anais", type: "Swaddle", image: img("#E3D5C2", "#FFFFFF") },
       t3: { id: "t3", name: "Bunny Lovey", brand: "Jellycat", type: "Plush", image: img("#F8E3E1", "#FFFFFF") },
     },
-    favoriteStyles: ["Zippy", "Two-piece"],
+    favoriteStyles: ["Zippy", "Two-piece PJs"],
     claims: { i2: { h: "someone-else", at: now } },
   };
   const mine = new Set(["i3"]);
   data.typeLists = {};
   const DEMO_DEFAULTS = {
-    clothes: ["Zippy", "Footie", "Romper", "Bodysuit", "Two-piece", "Pajamas", "Dress", "Bubble", "Swaddle", "Sleep bag", "Blanket", "Bib", "Hat", "Bow", "Shoes"],
+    clothes: ["Zippy", "Shorty", "Footie", "Romper", "Bodysuit", "Two-piece PJs", "Two-piece daywear", "Pajamas", "Dress", "Bubble", "Swim", "Outerwear", "Separates", "Swaddle", "Sleep bag", "Blanket", "Bib", "Hat", "Bow", "Shoes", "Accessory"],
     toy: ["Rattle", "Teether", "Stacker", "Blocks", "Book", "Plush", "Bath", "Music", "Activity", "Push & ride", "Puzzle", "Pretend play", "Outdoor"],
     other: ["Blanket", "Swaddle", "Lovey", "Bedding", "Bath", "Feeding", "Books", "Room decor", "Gear", "Keepsake"],
   };
