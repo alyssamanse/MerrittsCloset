@@ -44,11 +44,17 @@ jobs:
 
       - name: Deploy closet-api
         # Settings not listed here (env vars, max instances, memory) stay as they are.
+        shell: bash
         run: |
+          set +e
           gcloud run deploy closet-api \
             --source functions \
             --function api \
             --base-image nodejs22 \
             --region us-central1 \
             --project merrittscloset-4d74f \
-            --quiet
+            --quiet 2>&1 | tee deploy.log
+          status=${PIPESTATUS[0]}
+          # Surface the reason on the run's summary page if it fails.
+          if [ "$status" -ne 0 ]; then grep -v '^\s*$' deploy.log | tail -n 12 | sed 's/^/::error::/'; fi
+          exit $status
