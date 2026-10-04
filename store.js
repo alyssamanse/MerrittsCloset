@@ -77,9 +77,20 @@ export async function createFirebaseStore() {
   const isOwnerUser = (u) => !!u && (u.email || "").toLowerCase() === CONFIG.ownerEmail.toLowerCase();
 
   async function setData(data, fromCache = false) {
-    if (!fromCache) storage.set(CACHE_KEY, { at: Date.now(), data });
-    emit({ data, mine: await mineFrom(data), status: data ? "ok" : "empty" });
-    if (!data && !fromCache && state.user?.isOwner) mutate("init", {}).catch(() => {}); // first-time setup, once
+    if (!fromCache && data) storage.set(CACHE_KEY, { at: Date.now(), data });
+    emit({ data, mine: await mineFrom(data), status: data ? "ok" : "empty", setupError: null });
+    if (!data) ownerSetup();
+  }
+
+  // When the owner is signed in but the list can't be read (it doesn't exist yet,
+  // or the rules aren't published), ask the API: "init" creates the list if needed
+  // and returns it either way. Runs at most once per page load.
+  let setupTried = false;
+  function ownerSetup() {
+    if (setupTried || !state.user?.isOwner || state.data) return;
+    setupTried = true;
+    emit({ status: "loading" });
+    mutate("init", {}).catch((e) => emit({ status: "setup-error", setupError: e.message }));
   }
 
   // One document read, with at most MAX_RETRIES retries for transient errors.
@@ -100,7 +111,7 @@ export async function createFirebaseStore() {
           return;
         } catch (e) {
           const code = String(e?.code || "");
-          if (code.includes("permission-denied")) { lastFetch = Date.now(); emit({ status: "unavailable" }); return; }
+          if (code.includes("permission-denied")) { lastFetch = Date.now(); emit({ status: "unavailable" }); ownerSetup(); return; }
           const transient = /unavailable|deadline|internal|resource-exhausted/.test(code) || !code;
           if (!transient || n >= MAX_RETRIES) { emit({ status: state.data ? "ok" : "error" }); throw new FriendlyError("Couldn't load the list. Check your connection and try again."); }
           await sleep(backoff(n));
@@ -167,7 +178,7 @@ export async function createFirebaseStore() {
       fa.getRedirectResult(auth).catch(() => {});
       fa.onAuthStateChanged(auth, (u) => {
         emit({ user: u ? { isOwner: isOwnerUser(u), email: u.email } : null });
-        if (isOwnerUser(u) && state.status === "empty") mutate("init", {}).catch(() => {});
+        if (isOwnerUser(u) && !state.data && state.status !== "loading") ownerSetup();
       });
       load().catch((e) => console.warn(e.message));
       document.addEventListener("visibilitychange", () => {

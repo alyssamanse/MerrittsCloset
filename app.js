@@ -126,6 +126,9 @@ function body() {
   if (S.status === "loading" && !S.data) return `<div class="empty">Loading…</div>`;
   if (S.status === "error" && !S.data)
     return `<div class="empty">Couldn't load the list. Check your connection.<br><button class="btn small ghost" style="margin-top:12px" data-act="refresh">Try again</button></div>`;
+  if (S.status === "setup-error") return owner()
+    ? `<div class="empty">Couldn't set up your list: ${esc(S.setupError || "unknown error")}<br><span class="muted">Send this message to Claude for help.</span></div>`
+    : `<div class="empty">This list isn't available right now.</div>`;
   if (S.status === "unavailable") return `<div class="empty">This list isn't available right now.</div>`;
   if (S.status === "empty") return `<div class="empty">${owner() ? "Setting up your list…" : "This list isn't available right now."}</div>`;
   return tab === "wishlist" ? wishlistView() : tab === "closet" ? closetView() : sizesView();
