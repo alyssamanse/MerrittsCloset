@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Merritt's Closet</title>
-<meta name="theme-color" content="#EBD6D3" />
+<meta name="theme-color" content="#FBF7F2" />
 <meta name="description" content="Merritt's wishlist, closet and current sizes. Claim a gift so nobody doubles up." />
 <meta property="og:type" content="website" />
 <meta property="og:title" content="Merritt's Closet" />
@@ -13,13 +13,13 @@
 <meta property="og:image" content="https://alyssamanse.github.io/MerrittsCloset/share.png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
-<meta property="og:image:alt" content="A little bear above the words Merritt's Closet" />
+<meta property="og:image:alt" content="An M monogram with a tiny bear above the words Merritt's Closet" />
 <meta name="twitter:card" content="summary_large_image" />
 <link rel="apple-touch-icon" href="share-icon.png" />
 <meta name="color-scheme" content="light" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,500..700,100&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Jost:wght@400;500;600&display=swap" rel="stylesheet" />
 <style>
   /* Beige ground, dusty rose primary, sage accents. One light look on every
      device, including phones set to dark mode. */
@@ -242,10 +242,121 @@
 
   .toast { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 999px; font-weight: 700; font-size: 14px; z-index: 30; box-shadow: var(--shadow); width: max-content; max-width: calc(100vw - 32px); text-align: center; }
   .demo-bar { background: var(--moss-lt); color: var(--moss); text-align: center; font-size: 13px; font-weight: 800; padding: 6px; }
+
+  /* ── Boutique theme ─────────────────────────────────────────────────
+     Quiet and tailored: warm ivory ground, deep mauve for actions, olive sage for
+     "she has it", cocoa-plum text. Cormorant Garamond for names and headings,
+     Jost for everything you read or tap. One flourish only: the monogram crest. */
+  :root {
+    --paper: #FBF7F2; --surface: #FFFDFA; --ink: #3A2E30; --taupe: #8B7F7A; --line: #E9DFD7;
+    --rose: #8A5560; --cocoa: #7A4D55; --rose-lt: #F4E9E6; --blush: #EEDFDA; --blush-2: #DCC3BD;
+    --moss: #5E6B4E; --moss-lt: #E9ECE1; --hazel: #DCCDBB; --on-rose: #FFFFFF;
+    --serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+    --sans: Jost, "Avenir Next", "Helvetica Neue", system-ui, sans-serif;
+    --shadow: 0 1px 2px rgba(58,46,48,.05);
+  }
+  body { font: 400 16px/1.5 var(--sans); letter-spacing: .005em; }
+  b, strong { font-weight: 600; }
+  h1, h2, h3 { font-family: var(--serif); font-variation-settings: normal; font-weight: 500; letter-spacing: .005em; }
+
+  .hero { background: var(--paper); padding: calc(26px + env(safe-area-inset-top)) 16px 18px; }
+  .crest { color: var(--rose); display: flex; justify-content: center; margin-bottom: 6px; }
+  .crest svg { display: block; margin: 0; }
+  .hero h1 { font-size: 40px; font-weight: 500; line-height: 1.05; color: var(--ink); letter-spacing: 0; }
+  .hero p { font-size: 14.5px; font-weight: 400; color: var(--taupe); margin-top: 8px; }
+
+  .tabs { background: color-mix(in srgb, var(--paper) 94%, transparent); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); gap: 2px; padding: 0 8px; }
+  .tab { border-radius: 0; padding: 14px clamp(8px, 3vw, 16px) 12px; font-weight: 500; font-size: 15px; color: var(--taupe); border-bottom: 2px solid transparent; }
+  .tab[aria-selected="true"] { background: none; color: var(--ink); border-bottom-color: var(--rose); }
+
+  main { padding-top: 22px; }
+  .note { background: none; border-radius: 0; padding: 0 8px; margin: 2px auto 22px; max-width: 46ch; text-align: center; font: italic 500 18px/1.45 var(--serif); color: var(--taupe); }
+  .note b { font-weight: 600; color: var(--ink); }
+  .section-title { margin: 30px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .section-title h2, .brand-head h2 { font-size: 27px; font-weight: 500; }
+  .muted { font-size: 14px; }
+
+  /* Wishlist: tailored cards, square-cornered photo, serif names */
+  .card { border-radius: 6px; box-shadow: none; padding: 14px; grid-template-columns: 104px 1fr; gap: 14px; margin-bottom: 14px; }
+  .thumb { width: 104px; height: 130px; border-radius: 3px; }
+  .card h3 { font-size: 22px; font-weight: 500; line-height: 1.15; padding-right: 74px; }
+  .meta { font-size: 13.5px; }
+  .chip { font-weight: 500; font-size: 12.5px; padding: 3px 9px; border-radius: 3px; background: var(--rose-lt); color: var(--cocoa); }
+  .chip.ink { background: transparent; border: 1px solid var(--line); color: var(--ink); }
+  .chip.moss { background: var(--moss-lt); color: var(--moss); }
+  .ribbon { top: 14px; left: auto; right: 14px; background: none; color: var(--rose); padding: 0; border-radius: 0; text-transform: none; letter-spacing: 0; font: italic 500 16px/1 var(--serif); }
+  .actions { border-top: 1px solid var(--line); padding-top: 12px; }
+  .btn { border-radius: 4px; font-weight: 500; letter-spacing: .02em; padding: 10px 18px; }
+  .btn.small { padding: 8px 14px; font-size: 14px; }
+  .btn.ghost { border: 1px solid var(--blush-2); }
+  .btn.soft { background: var(--moss-lt); color: var(--moss); }
+  .link { font-weight: 500; }
+  .status { font-weight: 500; }
+
+  /* Filters: quiet outlined pills; selected fills with ink */
+  .filter { border: 1px solid var(--line); font-weight: 500; color: var(--taupe); padding: 6px 14px; }
+  .filter span { font-weight: 400; }
+  .filter[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+  .type-opt { border: 1px solid var(--line); font-weight: 500; }
+  .type-opt[aria-pressed="true"] { background: var(--moss); border-color: var(--moss); }
+
+  /* Closet: a photo-led catalog */
+  .brand-head { margin: 30px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .grid { grid-template-columns: repeat(2, 1fr); gap: 22px 14px; }
+  @media (min-width: 560px) { .grid { grid-template-columns: repeat(3, 1fr); } }
+  .print { background: none; border: 0; border-radius: 0; overflow: visible; }
+  .print img { aspect-ratio: 4 / 5; border-radius: 3px; }
+  .print span { padding: 8px 0 0; font: 500 18px/1.2 var(--serif); color: var(--ink); }
+  .print small { font: 400 12.5px/1.4 var(--sans); }
+  .pills { font-weight: 400; margin-top: 6px; }
+  .pill { font: 400 11.5px/1.5 var(--sans); letter-spacing: .01em; padding: 1px 7px; border-radius: 3px; }
+  .print.outgrown > span { color: var(--taupe); }
+  .grid.toys .print img { aspect-ratio: 1; }
+  .search .in { border-radius: 4px; }
+
+  .favs { background: var(--rose-lt); border: 0; border-radius: 6px; padding: 18px 16px 8px; }
+  .favs-head h2 { font-size: 24px; color: var(--cocoa); }
+  .fav-row { border-top: 1px solid var(--blush-2); }
+  .fav-thumb, .mini-img { border-radius: 3px; }
+  .fav-style { border-radius: 3px; font-weight: 500; }
+
+  /* Sizes: a tailored list rather than boxes */
+  .size-row { background: none; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 14px 2px; margin: 0; }
+  .size-row .name strong { font: 500 21px/1.2 var(--serif); }
+  .size-badge { font: 500 28px/1 var(--serif); color: var(--rose); }
+  .size-badge small { font: 400 12px/1.4 var(--sans); }
+  .plan-card, .stock-bar, .admin-card, .idea-row, .mini { border-radius: 6px; }
+  .plan-head h3 { font: 500 24px/1.15 var(--serif); }
+  .plan-brand strong { font: 500 19px/1.2 var(--serif); }
+  .ppill { border-radius: 3px; font-weight: 400; }
+  .ppill b { font-weight: 500; }
+  .mini b { font: 500 18px/1.2 var(--serif); }
+
+  /* Forms and sheets */
+  .in { border: 1px solid var(--line); border-radius: 4px; }
+  label.f { font-weight: 500; letter-spacing: .01em; }
+  .sheet { border-radius: 12px 12px 0 0; }
+  @media (min-width: 600px) { .sheet { border-radius: 12px; } }
+  .sheet h2, .modal h3 { font-size: 28px; font-weight: 500; }
+  .fab { border-radius: 999px; box-shadow: 0 6px 18px rgba(138,85,96,.28); }
+  .toast { border-radius: 4px; font-weight: 500; }
+  .icon-btn { border-radius: 4px; font-weight: 500; }
+  footer { border-top: 1px solid var(--line); max-width: 720px; margin: 0 auto; }
+  .size-badge, .plan-head h3, .print span, .mini b { font-variant-numeric: lining-nums; }
+  .card h3 { padding-right: 0; }
+  .card:has(.ribbon) h3 { padding-right: 84px; }
+  .swatch { font-weight: 500; }
+  .plan-brand { border-top-style: solid; }
+  .ppill.skip { border-style: solid; border-color: var(--line); }
+  .actions { border-top-style: solid; }
+  .link.quiet { font-weight: 500; }
+  .section-title h2, .brand-head h2 { line-height: 1.15; }
+  .section-title .link, .section-title > .muted { white-space: nowrap; }
+  .idea-row b, .fav-row strong { font: 500 18px/1.2 var(--serif); }
 </style>
 </head>
 <body>
   <div id="app"></div>
-  <script type="module" src="app.js?v=1004-0819"></script>
+  <script type="module" src="app.js?v=1004-0822"></script>
 </body>
 </html>

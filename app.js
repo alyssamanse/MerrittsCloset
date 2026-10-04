@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1004-0819";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-0819";
-const BUILD = "1004-0819"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1004-0822";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-0822";
+const BUILD = "1004-0822"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const TABS = ["wishlist", "ideas", "closet", "sizes"];
@@ -51,6 +51,19 @@ const PLACEHOLDER =
 const img = (src, cls = "", alt = "") =>
   `<img class="${cls}" src="${esc(safeUrl(src) || PLACEHOLDER)}" alt="${esc(alt)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='${PLACEHOLDER}'">`;
 
+const CREST = `<svg viewBox="0 0 96 104" width="88" height="96">
+  <circle cx="48" cy="56" r="40" fill="none" stroke="currentColor" stroke-width="1"/>
+  <circle cx="48" cy="56" r="35.5" fill="none" stroke="currentColor" stroke-width=".5" opacity=".55"/>
+  <g transform="translate(37 4)">
+    <circle cx="4" cy="5" r="3.6" fill="#C9AE97"/><circle cx="18" cy="5" r="3.6" fill="#C9AE97"/>
+    <circle cx="4" cy="5" r="1.7" fill="#F3E6D8"/><circle cx="18" cy="5" r="1.7" fill="#F3E6D8"/>
+    <ellipse cx="11" cy="11" rx="8.6" ry="8" fill="#C9AE97"/>
+    <ellipse cx="11" cy="14" rx="4.2" ry="3.2" fill="#F3E6D8"/>
+    <circle cx="7.6" cy="9.6" r="1" fill="#3A2E30"/><circle cx="14.4" cy="9.6" r="1" fill="#3A2E30"/>
+    <ellipse cx="11" cy="12.8" rx="1.5" ry="1.1" fill="#3A2E30"/>
+  </g>
+  <text x="48" y="73" text-anchor="middle" font-family="'Cormorant Garamond', Georgia, serif" font-style="italic" font-weight="500" font-size="50" fill="currentColor">M</text>
+</svg>`;
 const BEAR = `<svg width="46" height="40" viewBox="0 0 46 40" aria-hidden="true">
   <circle cx="9" cy="9" r="7.5" fill="#CBAE93"/><circle cx="37" cy="9" r="7.5" fill="#CBAE93"/>
   <circle cx="9" cy="9" r="3.8" fill="#F1E4D3"/><circle cx="37" cy="9" r="3.8" fill="#F1E4D3"/>
@@ -112,9 +125,9 @@ function render() {
   $app.innerHTML = `
     ${isDemo ? `<div class="demo-bar">Preview with sample data. Nothing here is saved.</div>` : ""}
     <header class="hero">
-      ${BEAR}
+      <div class="crest" aria-hidden="true">${CREST}</div>
       <h1>${name}'s Closet</h1>
-      <p>Wishlist · favorite brands · what she already has</p>
+      <p>Her wishes, her favorites, and what she already has</p>
     </header>
     <nav class="tabs" role="tablist">
       ${TABS.map((t) => `<button class="tab" role="tab" aria-selected="${tab === t}" data-tab="${t}">${TAB_LABEL[t]}</button>`).join("")}
