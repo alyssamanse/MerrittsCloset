@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1004-0919";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-0919";
-const BUILD = "1004-0919"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1004-0923";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-0923";
+const BUILD = "1004-0923"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = ["wishlist", "ideas", "closet", "sizes"];
@@ -147,6 +147,7 @@ function render() {
     <main>${adminPanel()}${body()}</main>
     ${owner() && S.status === "ok" ? `<button class="btn fab" data-act="add">+ Add</button>` : ""}
     <footer>
+      <button class="to-top" data-act="to-top" aria-label="Back to top"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg><span>Back to Top</span></button>
       ${tab !== "family" && (CONFIG.family || []).length ? `<div class="family-link"><button class="link" data-act="go-tab" data-to="family">Shopping for the rest of the family?</button></div>` : ""}
       <button class="link quiet" data-act="share">Share</button><span class="muted"> · </span>
       <button class="link quiet" data-act="refresh" ${dis("refresh")}>Refresh</button>
@@ -1487,6 +1488,7 @@ $app.addEventListener("click", (ev) => {
     case "go-tab": tab = t.dataset.to; history.replaceState(null, "", `${location.search}#${tab}`); render(); window.scrollTo({ top: 0 });
       if (t.dataset.focus) document.getElementById(t.dataset.focus)?.focus(); return;
     case "share": return shareSheet();
+    case "to-top": window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); return;
     case "fold-all":
       for (const d of document.querySelectorAll(".brand-fold")) { d.open = t.dataset.open === "1"; if (d.open) openBrands.add(d.dataset.brand); else openBrands.delete(d.dataset.brand); }
       return;
