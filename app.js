@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1004-0924";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-0924";
-const BUILD = "1004-0924"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1004-0940";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-0940";
+const BUILD = "1004-0940"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = ["wishlist", "ideas", "closet", "sizes"];
@@ -896,6 +896,7 @@ function familySheet(existing = null) {
           if (offered.length && category !== "clothes") { category = "clothes"; el.querySelectorAll('.seg[data-g="category"] [data-v]').forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.v === "clothes"))); }
           drawSizes();
           if (!r.title && !r.image) throw new Error("That store didn't share any details. Fill them in below.");
+          if (r.fromArchive) toast("That page is gone, so this came from a saved copy");
         } catch (err) { errEl.textContent = err.message; errEl.hidden = false; }
         finally { fill.disabled = false; fill.textContent = "Fill in"; }
       });
@@ -1295,6 +1296,7 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
           if (b?.currentSize && !f("size").value) setSize(f("size"), b.currentSize);
         }
         if (!r.title && !r.image) throw new Error("That store didn't share any details. Fill them in below.");
+        if (r.fromArchive) toast("That page is gone, so this came from a saved copy");
       } catch (err) {
         errEl.textContent = err.message; errEl.hidden = false;
       } finally {

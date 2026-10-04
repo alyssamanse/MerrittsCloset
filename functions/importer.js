@@ -20,11 +20,12 @@ function checkUrl(raw) {
 }
 function httpError(status, message) { const e = new Error(message); e.status = status; return e; }
 
-async function get(url, accept, { keepStatus = false } = {}) {
+async function get(url, accept, { keepStatus = false, timeoutMs = 9000, method = "GET" } = {}) {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 9000);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { headers: { "User-Agent": UA, Accept: accept, "Accept-Language": "en-US,en;q=0.9" }, redirect: "follow", signal: ctrl.signal });
+    const res = await fetch(url, { method, headers: { "User-Agent": UA, Accept: accept, "Accept-Language": "en-US,en;q=0.9" }, redirect: "follow", signal: ctrl.signal });
+    if (method === "HEAD") { checkUrl(res.url || url); return { status: res.status, type: res.headers?.get?.("content-type") || "" }; }
     checkUrl(res.url); // don't follow redirects into private addresses
     if (!res.ok) return keepStatus ? { status: res.status } : null;
     const buf = await res.arrayBuffer();
@@ -150,9 +151,46 @@ async function importLink(rawUrl) {
     if (r) { try { const p = parseShopify(r.text, base); if (p) return { url: base, ...p }; } catch { /* not Shopify */ } }
   }
 
-  const page = await get(base, "text/html,application/xhtml+xml");
-  if (!page) throw httpError(422, "That store didn't let us read the page — fill in the details by hand.");
+  const page = await get(base, "text/html,application/xhtml+xml", { keepStatus: true });
+  if (page?.text) {
+    const live = parseHtml(page.text, page.finalUrl || base);
+    if (live.title || live.image) return { url: base, ...live };
+  }
+  // Page gone (retired print) or unreadable: try a saved copy from the Internet Archive.
+  const archived = await fromWayback(base);
+  if (archived) return { url: base, ...archived, fromArchive: true };
+  if (!page?.text) throw httpError(422, "That page is gone and no saved copy was found. Fill in the details by hand.");
   return { url: base, ...parseHtml(page.text, page.finalUrl || base) };
+}
+
+// ── Wayback Machine fallback ────────────────────────────────────────
+// Looks up the newest saved copy of a product page and reads its photo and details.
+// Uses the original photo address if it still loads (store image servers often keep
+// retired photos); otherwise the archive's own copy of the photo.
+const WAYBACK_HOST = "web.archive.org";
+async function fromWayback(pageUrl) {
+  const clean = pageUrl.split(/[?#]/)[0];
+  const api = await get(`https://archive.org/wayback/available?url=${encodeURIComponent(clean)}`, "application/json", { timeoutMs: 7000 });
+  let snap;
+  try { snap = JSON.parse(api?.text || "{}")?.archived_snapshots?.closest; } catch { return null; }
+  if (!snap?.available || !snap.url || !/^2\d\d$/.test(String(snap.status || "200"))) return null;
+  let su;
+  try { su = new URL(snap.url.replace(/^http:/, "https:")); } catch { return null; }
+  if (su.hostname !== WAYBACK_HOST) return null;
+  const m = /^\/web\/(\d{4,14})[a-z_]*\/(.+)$/.exec(su.pathname + su.search);
+  if (!m) return null;
+  const [, ts, original] = m;
+  // "id_" asks for the page exactly as saved, without the archive's banner.
+  const page = await get(`https://${WAYBACK_HOST}/web/${ts}id_/${original}`, "text/html,application/xhtml+xml", { timeoutMs: 9000 });
+  if (!page?.text) return null;
+  const p = parseHtml(page.text, original);
+  if (!p.image && !p.title) return null;
+  if (p.image) {
+    const head = await get(p.image, "image/*", { method: "HEAD", timeoutMs: 5000 });
+    if (!(head && head.status < 400 && /^image\//.test(head.type))) p.image = `https://${WAYBACK_HOST}/web/${ts}im_/${p.image}`;
+  }
+  p.available = false; // an archived page says nothing about today's stock
+  return p;
 }
 
 // Size → age in months, for comparing sizes across brands ("6-12M" → 6, "2T" → 24).
@@ -214,4 +252,4 @@ async function checkStock(rawUrl, minSize = "") {
   return a === true ? "in" : a === false ? "out" : "unknown";
 }
 
-module.exports = { sizeRank, shopifyInStock, checkStock, availability, importLink, parseShopify, parseHtml, printFromTitle, checkUrl, httpError };
+module.exports = { fromWayback, sizeRank, shopifyInStock, checkStock, availability, importLink, parseShopify, parseHtml, printFromTitle, checkUrl, httpError };

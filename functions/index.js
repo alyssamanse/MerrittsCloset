@@ -116,6 +116,7 @@ functions.http("api", async (req, res) => {
           url: trim(r.url, 600), title: trim(r.title, 120), brand: trim(r.brand, 60), printName: trim(r.printName, 80),
           price: trim(r.price, 20), image: trim(r.image, 600),
           sizes: (r.sizes || []).slice(0, 30).map((s) => trim(s, 20)),
+          fromArchive: !!r.fromArchive,
         },
       });
     }
@@ -139,7 +140,9 @@ functions.http("api", async (req, res) => {
       let reduceAction, reducePayload, found = 0;
       if (action === "findPhotos") {
         const images = (await Promise.all(recs.map(async (r) => {
-          try { const p = await importLink(r.url); return p.image ? { id: r.id, image: trim(p.image, 600) } : null; } catch { return null; }
+          // Each lookup gets 24 s (live page, then the Wayback Machine) so the call ends inside Cloud Run's 30 s limit.
+          const deadline = new Promise((res) => setTimeout(() => res(null), 24000));
+          try { const p = await Promise.race([importLink(r.url), deadline]); return p?.image ? { id: r.id, image: trim(p.image, 600) } : null; } catch { return null; }
         }))).filter(Boolean);
         found = images.length;
         reduceAction = "setImages"; reducePayload = { images };

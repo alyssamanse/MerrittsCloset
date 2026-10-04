@@ -1,3 +1,4 @@
+const test = require("node:test");
 const f = require('../importer.js');
 const assert = require('assert');
 // Shopify .js shape
@@ -16,3 +17,26 @@ console.log(o); assert.equal(o.price, "$29.50"); assert.equal(o.title, "Cozy Sle
 for (const bad of ["http://localhost/x","http://169.254.169.254/","ftp://a.com","http://10.0.0.1/","http://[::1]/"]) assert.throws(() => f.checkUrl(bad));
 f.checkUrl("https://www.target.com/p/x");
 console.log("ALL PASS");
+
+test("retired product page falls back to the Wayback Machine", async () => {
+  const { importLink } = require("../importer");
+  const real = global.fetch;
+  const resp = (status, body, url, type = "text/html") => ({ ok: status < 400, status, url, headers: { get: () => type }, arrayBuffer: async () => new TextEncoder().encode(body).buffer });
+  const calls = [];
+  global.fetch = async (u, opts = {}) => {
+    const href = String(u); calls.push(`${opts.method || "GET"} ${href}`);
+    if (href.includes("/products/retired-zippy.js")) return resp(404, "", href);
+    if (href.startsWith("https://shop.example/products/retired-zippy")) return resp(404, "", href);
+    if (href.startsWith("https://archive.org/wayback/available")) return resp(200, JSON.stringify({ archived_snapshots: { closest: { available: true, status: "200", url: "http://web.archive.org/web/20240501000000/https://shop.example/products/retired-zippy" } } }), href, "application/json");
+    if (href === "https://web.archive.org/web/20240501000000id_/https://shop.example/products/retired-zippy")
+      return resp(200, `<html><head><meta property="og:title" content="Moon Zippy"><meta property="og:image" content="https://cdn.example/moon.jpg"></head></html>`, href);
+    if (href === "https://cdn.example/moon.jpg") return resp(404, "", href, "text/html"); // original photo gone too
+    return resp(404, "", href);
+  };
+  try {
+    const r = await importLink("https://shop.example/products/retired-zippy");
+    assert.equal(r.title, "Moon Zippy");
+    assert.equal(r.fromArchive, true);
+    assert.equal(r.image, "https://web.archive.org/web/20240501000000im_/https://cdn.example/moon.jpg", "uses the archive's copy when the original photo is gone");
+  } finally { global.fetch = real; }
+});
