@@ -144,9 +144,18 @@ const emptyState = () => ({ v: 1, visibility: "public", brands: {}, items: {}, p
 
 const claimHash = (key, itemId) => crypto.createHash("sha256").update(`${key}:${itemId}`).digest("hex");
 
+// Brand names written different ways ("The Sleepy Sloth" / "Sleepy Sloth", "Little One Shop" /
+// "Little One Co") share one key, so they group together and match each other.
+const BRAND_TAIL = new Set(["co", "company", "inc", "llc", "shop", "store", "boutique", "clothing", "baby", "kids"]);
+const brandKey = (name) => {
+  const w = String(name || "").toLowerCase().replace(/&/g, " and ").replace(/[’'.]/g, "").replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter(Boolean);
+  if (w[0] === "the" && w.length > 1) w.shift();
+  while (w.length > 1 && BRAND_TAIL.has(w[w.length - 1])) w.pop();
+  return w.join(" ");
+};
 function ensureBrand(state, name) {
   if (!name) return;
-  const exists = Object.values(state.brands).some((b) => b.name.toLowerCase() === name.toLowerCase());
+  const exists = Object.values(state.brands).some((b) => brandKey(b.name) === brandKey(name));
   if (exists) return;
   if (Object.keys(state.brands).length >= LIMITS.brands) return; // silently skip; item still saves
   const bid = "b_" + crypto.createHash("sha1").update(name.toLowerCase()).digest("hex").slice(0, 16);
@@ -475,8 +484,8 @@ function reduce(prev, action, payload, { isOwner, now }) {
         const brand = str(raw.brand, "Brand", 60, { required: true });
         const printName = str(raw.printName, "Print", 80, { required: true });
         const t = types(raw.types), link = url(raw.url, "Link"), outgrown = bool(raw.outgrown, "outgrown");
-        const k = key(brand, printName);
-        const match = Object.values(state.prints).find((x) => key(x.brand, x.printName) === k);
+        const k = key(brandKey(brand), printName);
+        const match = Object.values(state.prints).find((x) => key(brandKey(x.brand), x.printName) === k);
         if (match) {
           match.types = mergeTypes(match.types || [], t);
           if (!match.url && link) match.url = link;
@@ -485,8 +494,7 @@ function reduce(prev, action, payload, { isOwner, now }) {
           const pid = hid("p_", k);
           state.prints[pid] = { id: pid, brand, printName, types: t, favorite: false, outgrown, url: link, image: "", createdAt: now };
         }
-        ensureBrand(state, brand);
-        addToList("clothes", t);
+        addToList("clothes", t); // (imports don't add brands to Favorite Brands; you choose those)
       }
       for (const raw of ts) {
         onlyKeys(raw, ["category", "name", "brand", "type", "url"], "toy");
@@ -562,4 +570,4 @@ const RATES = {
   lookups: 8,         // Find photos / Check stock calls (each reads up to 10 store pages)
 };
 
-module.exports = { MAX_STOCK_RESULTS, DEFAULT_TYPES, reduce, publicView, Limiter, RATES, LIMITS, ApiError, claimHash, GUEST_ACTIONS, OWNER_ACTIONS };
+module.exports = { brandKey, MAX_STOCK_RESULTS, DEFAULT_TYPES, reduce, publicView, Limiter, RATES, LIMITS, ApiError, claimHash, GUEST_ACTIONS, OWNER_ACTIONS };

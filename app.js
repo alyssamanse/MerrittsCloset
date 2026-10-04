@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1004-0906";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-0906";
-const BUILD = "1004-0906"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1004-0919";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-0919";
+const BUILD = "1004-0919"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = ["wishlist", "ideas", "closet", "sizes"];
@@ -33,7 +33,16 @@ const owner = () => !!S.user?.isOwner;
 const newId = () => crypto.randomUUID().replace(/-/g, "").slice(0, 20);
 const list = (m) => Object.values(m || {});
 const brands = () => list(S.data?.brands).sort((a, b) => a.name.localeCompare(b.name));
-const brandByName = (name) => list(S.data?.brands).find((b) => b.name.trim().toLowerCase() === (name || "").trim().toLowerCase());
+// Brand names written different ways ("The Sleepy Sloth" / "Sleepy Sloth", "Little One Shop" /
+// "Little One Co") share one key, so they group together and match each other.
+const BRAND_TAIL = new Set(["co", "company", "inc", "llc", "shop", "store", "boutique", "clothing", "baby", "kids"]);
+const brandKey = (name) => {
+  const w = String(name || "").toLowerCase().replace(/&/g, " and ").replace(/[’'.]/g, "").replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter(Boolean);
+  if (w[0] === "the" && w.length > 1) w.shift();
+  while (w.length > 1 && BRAND_TAIL.has(w[w.length - 1])) w.pop();
+  return w.join(" ");
+};
+const brandByName = (name) => { const k = brandKey(name); return k ? list(S.data?.brands).find((b) => brandKey(b.name) === k) : undefined; };
 const catOf = (i) => (i.category === "toy" || i.category === "other" ? i.category : "clothes"); // wishlist items
 const hasCat = (t) => (t.category === "other" ? "other" : "toy");                             // "what she has" non-clothes
 const isToy = (i) => catOf(i) !== "clothes"; // toys and other things share the no-size layout
@@ -300,21 +309,31 @@ function closetResults() {
 // searching or filtering opens everything that matches.
 const openBrands = new Set();
 function printGroups(prints, { forceOpen = false } = {}) {
-  const groups = new Map();
+  // Group by brand key so spelling variants share one section. The section is named after
+  // her Favorite Brands entry if there is one, else the most common spelling.
+  const groups = new Map(), spellings = new Map();
   for (const p of prints) {
-    const key = (p.brand || "Other").trim();
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(p);
+    const k = brandKey(p.brand) || "other";
+    if (!groups.has(k)) { groups.set(k, []); spellings.set(k, new Map()); }
+    groups.get(k).push(p);
+    const sp = (p.brand || "Other").trim(); spellings.get(k).set(sp, (spellings.get(k).get(sp) || 0) + 1);
   }
-  const names = [...groups.keys()].sort((a, b) => a.localeCompare(b));
+  const nameOf = (k) => brandByName(k)?.name || [...spellings.get(k)].sort((a, b) => b[1] - a[1] || a[0].length - b[0].length)[0][0];
+  const isFav = (k) => !!brandByName(k);
+  // Her favorite brands (Sizes tab) first, most prints first; then everything else A–Z.
+  const keys = [...groups.keys()].sort((a, b) => isFav(b) - isFav(a)
+    || (isFav(a) ? groups.get(b).length - groups.get(a).length : 0)
+    || a.localeCompare(b)); // (keys skip a leading "The", so The Sleepy Sloth sorts under S)
+  const names = keys.map(nameOf);
   const allOpen = forceOpen || names.length === 1;
   return `${allOpen ? "" : `<div class="fold-all"><button class="link" data-act="fold-all" data-open="1">Expand All</button><button class="link" data-act="fold-all" data-open="0">Collapse All</button></div>`}
-  ${names.map((n) => {
-    const b = brandByName(n);
-    const ps = groups.get(n).sort((a, b) => !!a.outgrown - !!b.outgrown || (a.printName || "").localeCompare(b.printName || ""));
+  ${keys.map((gk, gi) => {
+    const n = names[gi];
+    const b = brandByName(gk);
+    const ps = groups.get(gk).sort((a, b) => !!a.outgrown - !!b.outgrown || (a.printName || "").localeCompare(b.printName || ""));
     return `
       <details class="brand-fold" data-brand="${esc(n)}" ${allOpen || openBrands.has(n) ? "open" : ""}>
-        <summary class="brand-head"><h2>${esc(n)}</h2><span class="brand-meta">${ps.length} ${ps.length === 1 ? "Print" : "Prints"}${b?.currentSize ? ` · Wears ${esc(b.currentSize)}` : ""}</span><span class="chev" aria-hidden="true"></span></summary>
+        <summary class="brand-head"><h2>${b ? `<span class="fav-mark" aria-label="Favorite brand">★</span> ` : ""}${esc(n)}</h2><span class="brand-meta">${ps.length} ${ps.length === 1 ? "Print" : "Prints"}${b?.currentSize ? ` · Wears ${esc(b.currentSize)}` : ""}</span><span class="chev" aria-hidden="true"></span></summary>
         <div class="grid">
           ${ps.map((p) => tile(p, "edit-print", (p.favorite ? "★ " : "") + (p.printName || "Untitled print"), p.types || [])).join("")}
         </div>

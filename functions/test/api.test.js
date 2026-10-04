@@ -442,3 +442,18 @@ test("family wishlist: owner adds, guests claim anonymously, validated and cappe
   assert.ok(!d.body.data.family.fam_item_0001 && !d.body.data.claims.fam_item_0001, "delete clears the claim too");
   assert.equal((await call("deleteFamilyItem", { id: "fam_item_0002" })).status, 403);
 });
+
+test("brand spellings: imports merge across variants and don't fill Favorite Brands", () => {
+  const own = { isOwner: true, now: 1 };
+  let s = { v: 1, visibility: "public", brands: {}, items: {}, prints: {}, toys: {}, claims: {} };
+  s = logic.reduce(s, "importBatch", { prints: [{ brand: "The Sleepy Sloth", printName: "Bootanicals", types: ["Zippy"] }] }, own).state;
+  s = logic.reduce(s, "importBatch", { prints: [{ brand: "Sleepy Sloth", printName: "bootanicals", types: ["Dress"] }] }, own).state;
+  const ps = Object.values(s.prints);
+  assert.equal(ps.length, 1, "same print under two spellings merges");
+  assert.deepEqual(ps[0].types, ["Zippy", "Dress"]);
+  assert.equal(Object.keys(s.brands).length, 0, "imports leave Favorite Brands alone");
+  assert.equal(logic.brandKey("Little One Shop"), logic.brandKey("Little One Co"));
+  s = logic.reduce(s, "upsertBrand", { brand: { id: "brand_los_001", name: "Little One Shop", currentSize: "", notes: "" } }, own).state;
+  s = logic.reduce(s, "upsertItem", { item: { id: "item_los_0001", title: "Set", brand: "Little One Co" } }, own).state;
+  assert.equal(Object.keys(s.brands).length, 1, "a variant spelling doesn't add a second brand");
+});

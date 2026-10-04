@@ -10,7 +10,7 @@
 //   • Retries are capped (2) with backoff, only for transient errors, and every
 //     change is idempotent on the server, so a retry can't double a write.
 //   • Identical in-flight requests are merged (double taps send one request).
-import { CONFIG } from "./config.js?v=1004-0906";
+import { CONFIG } from "./config.js?v=1004-0919";
 
 const SDK = "https://www.gstatic.com/firebasejs/11.0.2";
 const CACHE_KEY = `closet:${CONFIG.wishlistId}`;
@@ -346,7 +346,6 @@ export function createDemoStore() {
         const match = Object.values(data.prints).find((x) => k(x.brand, x.printName) === k(p.brand, p.printName));
         if (match) match.types = [...new Set([...(match.types || []), ...(p.types || [])])];
         else { const id = "p_" + Math.random().toString(36).slice(2, 12); data.prints[id] = { id, ...p }; }
-        ensureBrand(p.brand);
       }
       for (const t of toys) {
         if (Object.values(data.toys).some((x) => k(x.category || "toy", x.name, x.brand) === k(t.category, t.name, t.brand))) continue;
