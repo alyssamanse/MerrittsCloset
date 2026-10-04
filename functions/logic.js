@@ -154,14 +154,6 @@ const brandKey = (name) => {
   while (w.length > 1 && BRAND_TAIL.has(w[w.length - 1])) w.pop();
   return w.join(" ");
 };
-function ensureBrand(state, name) {
-  if (!name) return;
-  const exists = Object.values(state.brands).some((b) => brandKey(b.name) === brandKey(name));
-  if (exists) return;
-  if (Object.keys(state.brands).length >= LIMITS.brands) return; // silently skip; item still saves
-  const bid = "b_" + crypto.createHash("sha1").update(name.toLowerCase()).digest("hex").slice(0, 16);
-  state.brands[bid] = { id: bid, name, currentSize: "", notes: "" };
-}
 
 // ── reducer ─────────────────────────────────────────────────────────
 // (state | null, action, payload, { isOwner, now }) → { state, changed }
@@ -289,7 +281,6 @@ function reduce(prev, action, payload, { isOwner, now }) {
       const next = { ...it, createdAt: existing?.createdAt ?? now };
       if (existing && JSON.stringify(existing) === JSON.stringify(next)) return same;
       state.items[it.id] = next;
-      ensureBrand(state, it.brand);
       break;
     }
     case "deleteItem": {
@@ -335,7 +326,6 @@ function reduce(prev, action, payload, { isOwner, now }) {
       }
       delete state.items[itemId];
       delete state.claims[itemId];
-      ensureBrand(state, it.brand);
       break;
     }
 
@@ -347,7 +337,6 @@ function reduce(prev, action, payload, { isOwner, now }) {
       const next = { ...pr, createdAt: existing?.createdAt ?? now };
       if (existing && JSON.stringify(existing) === JSON.stringify(next)) return same;
       state.prints[pr.id] = next;
-      ensureBrand(state, pr.brand);
       break;
     }
     case "setColors": {

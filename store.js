@@ -10,7 +10,7 @@
 //   • Retries are capped (2) with backoff, only for transient errors, and every
 //     change is idempotent on the server, so a retry can't double a write.
 //   • Identical in-flight requests are merged (double taps send one request).
-import { CONFIG } from "./config.js?v=1004-1107";
+import { CONFIG } from "./config.js?v=1004-1119";
 
 const SDK = "https://www.gstatic.com/firebasejs/11.0.2";
 const CACHE_KEY = `closet:${CONFIG.wishlistId}`;
@@ -292,12 +292,6 @@ export function createDemoStore() {
   let notify = () => {};
   const emit = () => notify({ data: structuredClone(data), user, mine: new Set(mine), status: "ok" });
   const delay = () => new Promise((r) => setTimeout(r, 250));
-  const ensureBrand = (name) => {
-    if (name && !Object.values(data.brands).some((b) => b.name.toLowerCase() === name.toLowerCase())) {
-      const id = `b_${Math.random().toString(36).slice(2, 10)}`;
-      data.brands[id] = { id, name, currentSize: "", notes: "" };
-    }
-  };
   const m = (fn) => async (...a) => { await delay(); fn(...a); emit(); };
   return {
     mode: "demo",
@@ -308,7 +302,7 @@ export function createDemoStore() {
     claim: m((id) => { if (data.claims[id]?.h) throw new FriendlyError("Someone already claimed this one."); data.claims[id] = { h: "mine", at: Date.now() }; mine.add(id); }),
     unclaim: m((id) => { data.claims[id] = { h: null, at: Date.now() }; mine.delete(id); }),
     resetClaim: m((id) => { data.claims[id] = { h: null, at: Date.now() }; mine.delete(id); }),
-    upsertItem: m((it) => { data.items[it.id] = { ...it, createdAt: data.items[it.id]?.createdAt ?? Date.now() }; ensureBrand(it.brand); }),
+    upsertItem: m((it) => { data.items[it.id] = { ...it, createdAt: data.items[it.id]?.createdAt ?? Date.now() }; }),
     deleteItem: m((id) => { delete data.items[id]; delete data.claims[id]; }),
     receive: m((id) => {
       const it = data.items[id]; if (!it) return;
@@ -321,9 +315,9 @@ export function createDemoStore() {
       const match = Object.values(data.prints).find((x) => (x.brand || "").toLowerCase() === (it.brand || "").toLowerCase() && (x.printName || "").toLowerCase() === pn.toLowerCase());
       if (match) { if (it.type && !(match.types || []).includes(it.type)) match.types = [...(match.types || []), it.type]; match.outgrown = false; }
       else data.prints[`r_${id}`] = { id: `r_${id}`, brand: it.brand, printName: pn, types: it.type ? [it.type] : [], image: it.image, url: it.url };
-      delete data.items[id]; delete data.claims[id]; mine.delete(id); ensureBrand(it.brand);
+      delete data.items[id]; delete data.claims[id]; mine.delete(id);
     }),
-    upsertPrint: m((p) => { data.prints[p.id] = p; ensureBrand(p.brand); }),
+    upsertPrint: m((p) => { data.prints[p.id] = p; }),
     deletePrint: m((id) => { delete data.prints[id]; }),
     upsertToy: m((t) => { data.toys[t.id] = t; }),
     deleteToy: m((id) => { delete data.toys[id]; }),

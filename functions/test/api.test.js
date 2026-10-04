@@ -71,7 +71,7 @@ test("owner can set up and add items; guests cannot", async () => {
   const r = await call("upsertItem", { item: item("item_00000001") }, { token: "owner" });
   assert.equal(r.status, 200);
   assert.ok(r.body.data.items.item_00000001);
-  assert.ok(Object.values(r.body.data.brands).some((b) => b.name === "Kyte Baby"), "brand auto-created");
+  assert.ok(!Object.values(r.body.data.brands).some((b) => b.name === "Kyte Baby"), "items never add Favorite Brands");
 
   for (const [action, payload] of [
     ["upsertItem", { item: item("item_00000002") }],              // #4 create arbitrary items
