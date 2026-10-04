@@ -1,5 +1,6 @@
-import { CONFIG } from "./config.js";
-import { createFirebaseStore, createDemoStore } from "./store.js";
+import { CONFIG } from "./config.js?v=1004-0819";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-0819";
+const BUILD = "1004-0819"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const TABS = ["wishlist", "ideas", "closet", "sizes"];
@@ -124,6 +125,7 @@ function render() {
       <button class="link quiet" data-act="share">Share</button><span class="muted"> · </span>
       <button class="link quiet" data-act="refresh" ${dis("refresh")}>Refresh</button>
       ${S.user ? `<span class="muted"> · ${owner() ? "Editing on" : "Signed in"} · </span><button class="link" data-act="signout">Sign out</button>` : ""}
+      ${owner() || adminEntry ? `<div class="build muted">Version ${esc(BUILD)} · <button class="link" data-act="force-update" ${dis("update")}>${busy.has("update") ? "Updating…" : "Get latest version"}</button></div>` : ""}
     </footer>`;
 }
 
@@ -713,6 +715,23 @@ function ideasView() {
     ${sections.join("") || `<div class="empty">Gift ideas will show up here once there's a wishlist or some favorites.</div>`}`;
 }
 
+// ── get the latest version (for a stale home-screen app) ─────────────
+// Clears this phone's saved copy of the list, refreshes the browser's cached site files,
+// then reloads. Nothing on the server changes.
+async function forceUpdate() {
+  if (busy.has("update")) return;
+  busy.add("update"); render();
+  try { localStorage.removeItem(`closet:${CONFIG.wishlistId}`); } catch {}
+  try { for (const r of (await navigator.serviceWorker?.getRegistrations?.()) || []) await r.unregister(); } catch {}
+  try { if (window.caches) for (const k of await caches.keys()) await caches.delete(k); } catch {}
+  const base = location.href.split(/[?#]/)[0];
+  await Promise.all(["", "index.html", "app.js", "store.js", "config.js"].map((f) =>
+    fetch(new URL(f, base), { cache: "reload" }).catch(() => {})));
+  const q = new URLSearchParams(location.search);
+  q.set("fresh", Date.now().toString(36));
+  location.replace(`${base}?${q.toString().replace(/=(&|$)/g, "$1")}${location.hash}`);
+}
+
 // ── share ────────────────────────────────────────────────────────────
 const SITE_URL = "https://alyssamanse.github.io/MerrittsCloset/";
 function shareSheet() {
@@ -1238,6 +1257,7 @@ $app.addEventListener("click", (ev) => {
     case "go-tab": tab = t.dataset.to; history.replaceState(null, "", `${location.search}#${tab}`); render(); window.scrollTo({ top: 0 });
       if (t.dataset.focus) document.getElementById(t.dataset.focus)?.focus(); return;
     case "share": return shareSheet();
+    case "force-update": return forceUpdate();
     case "edit-favstyles": return favStylesSheet();
     case "edit-brand": return brandSheet(S.data.brands[id]);
     case "refresh": return act("refresh", async () => { if (!(await store.refresh())) toast("Already up to date"); });
