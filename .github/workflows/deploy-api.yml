@@ -4,7 +4,9 @@
 name: Deploy API
 
 on:
-  # Automatic deploys on push are switched on once Google Cloud sign-in is set up.
+  push:
+    branches: [main]
+    paths: ["functions/**", ".github/workflows/deploy-api.yml"]
   workflow_dispatch:
 
 permissions:
