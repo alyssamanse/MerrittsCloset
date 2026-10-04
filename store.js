@@ -10,7 +10,7 @@
 //   • Retries are capped (2) with backoff, only for transient errors, and every
 //     change is idempotent on the server, so a retry can't double a write.
 //   • Identical in-flight requests are merged (double taps send one request).
-import { CONFIG } from "./config.js?v=1004-1119";
+import { CONFIG } from "./config.js?v=1004-1136";
 
 const SDK = "https://www.gstatic.com/firebasejs/11.0.2";
 const CACHE_KEY = `closet:${CONFIG.wishlistId}`;
