@@ -377,10 +377,71 @@ function sizesView() {
         ${owner() ? `<button class="link" data-act="edit-brand" data-id="${b.id}">Edit</button>` : ""}
       </div>`).join("")
       : `<div class="empty">No brands yet.</div>`}
-    <div class="section-title"><h2>Her colors</h2></div>
-    <div class="swatches">
-      ${CONFIG.palette.map((c) => `<div class="swatch"><i style="background:${esc(c.hex)}"></i>${esc(c.name)}</div>`).join("")}
+    <div class="section-title"><h2>Her colors</h2>${owner() ? `<button class="link" data-act="edit-colors">Edit</button>` : ""}</div>
+    ${herColors().length
+      ? `<div class="swatches">${herColors().map((c) => `<div class="swatch"><i style="background:${esc(c.hex)}"></i>${esc(c.name)}</div>`).join("")}</div>`
+      : `<div class="empty">${owner() ? "No colors yet. Tap Edit to add some." : "No colors listed yet."}</div>`}`;
+}
+
+// Saved colors win; until the first save, the starter palette from config.js shows.
+const herColors = () => (Array.isArray(S.data?.colors) ? S.data.colors : CONFIG.palette);
+const MAX_COLORS = 24;
+
+function colorsSheet() {
+  let rows = herColors().map((c) => ({ name: c.name, hex: c.hex }));
+  const rowHtml = (c, i) => `
+    <div class="color-row" data-i="${i}">
+      <input type="color" class="color-pick" value="${esc(c.hex)}" aria-label="Color for ${esc(c.name || "new color")}" />
+      <input class="in" maxlength="30" value="${esc(c.name)}" placeholder="Color name" aria-label="Color name" />
+      <button class="icon-btn" data-m="up" aria-label="Move up" ${i === 0 ? "disabled" : ""}>↑</button>
+      <button class="icon-btn" data-m="down" aria-label="Move down" ${i === rows.length - 1 ? "disabled" : ""}>↓</button>
+      <button class="icon-btn danger" data-m="remove" aria-label="Remove ${esc(c.name)}">×</button>
     </div>`;
+  openSheet(
+    `<h2>Her colors</h2>
+     <p class="muted">Shown on the Sizes page so gifters know what she wears. Tap a circle to pick the shade.</p>
+     <div class="color-list"></div>
+     <button class="btn ghost small" data-m="add">+ Add color</button>
+     <div class="err sheet-err" hidden></div>
+     <div class="sheet-actions"><span class="spacer"></span>
+       <button class="btn ghost" data-act="cancel">Cancel</button>
+       <button class="btn" data-act="save">Save</button></div>`,
+    (el) => {
+      const listEl = el.querySelector(".color-list"), addBtn = el.querySelector('[data-m="add"]');
+      const draw = () => {
+        listEl.innerHTML = rows.length ? rows.map(rowHtml).join("") : `<p class="muted">No colors. Tap Add color.</p>`;
+        addBtn.disabled = rows.length >= MAX_COLORS;
+      };
+      draw();
+      listEl.addEventListener("input", (ev) => {
+        const i = Number(ev.target.closest(".color-row")?.dataset.i);
+        if (Number.isNaN(i)) return;
+        if (ev.target.type === "color") rows[i].hex = ev.target.value;
+        else rows[i].name = ev.target.value;
+      });
+      listEl.addEventListener("click", (ev) => {
+        const b = ev.target.closest("[data-m]"); if (!b) return;
+        const i = Number(b.closest(".color-row").dataset.i);
+        if (b.dataset.m === "remove") rows.splice(i, 1);
+        if (b.dataset.m === "up" && i > 0) [rows[i - 1], rows[i]] = [rows[i], rows[i - 1]];
+        if (b.dataset.m === "down" && i < rows.length - 1) [rows[i + 1], rows[i]] = [rows[i], rows[i + 1]];
+        draw();
+      });
+      addBtn.addEventListener("click", () => {
+        rows.push({ name: "", hex: "#D4AEAA" }); draw();
+        listEl.querySelector(".color-row:last-child .in")?.focus();
+      });
+      el.querySelector('[data-act="cancel"]').addEventListener("click", () => closeSheet());
+      wireSave(el, async () => {
+        const clean = rows.map((c) => ({ name: c.name.trim(), hex: c.hex.toUpperCase() })).filter((c) => c.name || c.hex !== "#D4AEAA");
+        if (clean.some((c) => !c.name)) throw new Error("Give every color a name, or remove it.");
+        const seen = new Set();
+        for (const c of clean) { const k = c.name.toLowerCase(); if (seen.has(k)) throw new Error(`"${c.name}" is in the list twice.`); seen.add(k); }
+        await store.setColors(clean);
+        return "Colors saved";
+      });
+    }
+  );
 }
 
 // ── sheets (add / edit) ──────────────────────────────────────────────
@@ -878,6 +939,7 @@ $app.addEventListener("click", (ev) => {
     case "add": return tab === "sizes" ? brandSheet() : itemSheet();
     case "add-brand": return brandSheet();
     case "import-list": return importSheet();
+    case "edit-colors": return colorsSheet();
     case "edit-favstyles": return favStylesSheet();
     case "edit-brand": return brandSheet(S.data.brands[id]);
     case "refresh": return act("refresh", async () => { if (!(await store.refresh())) toast("Already up to date"); });

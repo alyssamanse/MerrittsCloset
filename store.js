@@ -212,6 +212,7 @@ export async function createFirebaseStore() {
     renameType: (category, from, to) => mutate("renameType", { category, from, to }),
     deleteType: (category, name) => mutate("deleteType", { category, name }),
     importBatch: (prints, toys) => mutate("importBatch", { prints, toys }),
+    setColors: (colors) => mutate("setColors", { colors }),
     upsertBrand: (brand) => mutate("upsertBrand", { brand }),
     deleteBrand: (id) => mutate("deleteBrand", { id }),
     async importLink(url) { return (await call("import", { url })).product; },
@@ -334,6 +335,7 @@ export function createDemoStore() {
         const id = "t_" + Math.random().toString(36).slice(2, 12); data.toys[id] = { id, ...t };
       }
     }),
+    setColors: m((colors) => { data.colors = colors; }),
     upsertBrand: m((b) => { data.brands[b.id] = b; }),
     deleteBrand: m((id) => { delete data.brands[id]; }),
     async importLink(url) {
