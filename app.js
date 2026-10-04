@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1004-0923";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-0923";
-const BUILD = "1004-0923"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1004-0924";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-0924";
+const BUILD = "1004-0924"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = ["wishlist", "ideas", "closet", "sizes"];
@@ -261,7 +261,7 @@ function itemCard(i) {
       ${i.priority === "most" && !claimed ? `<span class="ribbon">Most Wanted</span>` : ""}
       ${link ? `<a href="${esc(link)}" target="_blank" rel="noopener noreferrer">${img(i.image, "thumb", i.title)}</a>` : img(i.image, "thumb", i.title)}
       <div class="card-body">
-        <h3>${esc(i.title || "Untitled")}</h3>
+        <h3>${link ? `<a class="title-link" href="${esc(link)}" target="_blank" rel="noopener noreferrer">${esc(i.title || "Untitled")}</a>` : esc(i.title || "Untitled")}</h3>
         ${sub ? `<div class="meta">${sub}</div>` : ""}
         <div class="chips">${chips.filter(Boolean).join("")}</div>
         ${i.notes ? `<div class="meta" style="margin-top:6px">${esc(i.notes)}</div>` : ""}
