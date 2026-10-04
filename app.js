@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1004-1353";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-1353";
-const BUILD = "1004-1353"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1004-1617";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-1617";
+const BUILD = "1004-1617"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = ["wishlist", "closet", "sizes"];
@@ -1171,7 +1171,7 @@ function closeSheet(rerender = true) {
   if (rerender) render();
 }
 // Clothing sizes offered in dropdowns (occasions, brand sizes, wishlist clothes).
-const CLOTHING_SIZES = ["6–9M", "6–12M", "12–18M", "18–24M", "2T", "3T", "4T"];
+const CLOTHING_SIZES = ["3–6M", "6–9M", "6–12M", "12–18M", "18–24M", "2T", "3T", "4T"];
 const dash = (v) => String(v || "").trim().replace(/(\d)\s*-\s*(\d)/g, "$1–$2");
 // Kids' shoe sizes (US "C" sizing), shown instead when the type is shoes.
 const SHOE_SIZES = ["1C", "2C", "3C", "3.5C", "4C", "4.5C", "5C", "5.5C", "6C", "6.5C", "7C", "7.5C", "8C", "8.5C", "9C", "9.5C", "10C"];
