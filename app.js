@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1004-0828";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-0828";
-const BUILD = "1004-0828"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1004-0834";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-0834";
+const BUILD = "1004-0834"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const TABS = ["wishlist", "ideas", "closet", "sizes"];
@@ -126,7 +126,7 @@ function render() {
     ${isDemo ? `<div class="demo-bar">Preview with sample data. Nothing here is saved.</div>` : ""}
     <header class="hero">
       <div class="crest" aria-hidden="true">${CREST}</div>
-      <h1>${name}'s Closet</h1>
+      <h1 class="logo" aria-label="${name}'s Closet"><span class="logo-name">${name}'s</span><span class="logo-sub">Closet</span></h1>
       <p>Her wishes, her favorites, and what she already has</p>
     </header>
     <nav class="tabs" role="tablist">

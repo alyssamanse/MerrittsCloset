@@ -19,7 +19,7 @@
 <meta name="color-scheme" content="light" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,500&family=Nunito+Sans:opsz,wght@6..12,400..900&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,500;1,600&family=Figtree:wght@400..800&display=swap" rel="stylesheet" />
 <style>
   /* Beige ground, dusty rose primary, sage accents. One light look on every
      device, including phones set to dark mode. */
@@ -354,31 +354,39 @@
   .section-title .link, .section-title > .muted { white-space: nowrap; }
   .idea-row b, .fav-row strong { font: 500 18px/1.2 var(--serif); }
 
-  /* ── Bolder sans (Oct 4): Nunito Sans everywhere; the serif stays only in the M monogram ── */
-  :root { --serif: "Nunito Sans", "Avenir Next", system-ui, sans-serif; --sans: "Nunito Sans", "Avenir Next", system-ui, sans-serif; }
+  /* ── Figtree (Oct 4): one sans for everything; the logo pairs it with italic Cormorant ── */
+  :root { --serif: Figtree, "Avenir Next", system-ui, sans-serif; --sans: Figtree, "Avenir Next", system-ui, sans-serif; --logo: "Cormorant Garamond", Georgia, serif; }
   body { font-family: var(--sans); font-weight: 400; letter-spacing: 0; }
-  h1, h2, h3 { font-family: var(--sans); font-weight: 800; letter-spacing: -.01em; }
-  .hero h1 { font-size: 34px; font-weight: 900; letter-spacing: -.02em; }
-  .hero p { font-weight: 600; }
-  .tab { font-weight: 700; }
-  .section-title h2, .brand-head h2 { font-size: 22px; font-weight: 800; }
-  .note { font: 600 15px/1.5 var(--sans); color: var(--taupe); }
-  .note b { font-weight: 800; }
-  .card h3 { font-size: 18px; font-weight: 800; line-height: 1.25; }
-  .ribbon { font: 800 12px/1 var(--sans); letter-spacing: .02em; }
-  .btn { font-weight: 800; letter-spacing: 0; }
-  .link, .status, .filter, .type-opt, label.f { font-weight: 700; }
-  .chip { font-weight: 700; }
-  .favs-head h2 { font-size: 20px; font-weight: 800; }
-  .fav-style { font-weight: 800; }
-  .fav-row strong, .idea-row b, .mini b { font: 800 15px/1.3 var(--sans); }
-  .size-row .name strong { font: 800 17px/1.25 var(--sans); }
-  .size-badge { font: 900 24px/1 var(--sans); }
-  .plan-head h3 { font: 800 20px/1.2 var(--sans); }
-  .plan-brand strong { font: 800 16px/1.25 var(--sans); }
-  .ppill b { font-weight: 800; }
-  .sheet h2, .modal h3 { font-size: 22px; font-weight: 800; }
-  .swatch { font-weight: 700; }
+  h1, h2, h3 { font-family: var(--sans); font-weight: 700; letter-spacing: -.01em; }
+  .hero p { font-weight: 500; }
+  .tab { font-weight: 600; }
+  .section-title h2, .brand-head h2 { font-size: 21px; font-weight: 700; }
+  .note { font: 500 15px/1.55 var(--sans); color: var(--taupe); }
+  .note b { font-weight: 700; color: var(--ink); }
+  .card h3 { font-size: 17.5px; font-weight: 700; line-height: 1.25; }
+  .ribbon { font: 700 12px/1 var(--sans); letter-spacing: .01em; }
+  .btn { font-weight: 700; letter-spacing: 0; }
+  .link, .status, .filter, .type-opt, label.f { font-weight: 600; }
+  .chip { font-weight: 600; }
+  .favs-head h2 { font-size: 20px; font-weight: 700; }
+  .fav-style { font-weight: 700; }
+  .fav-row strong, .idea-row b, .mini b { font: 700 15px/1.3 var(--sans); }
+  .size-row .name strong { font: 700 17px/1.25 var(--sans); }
+  .size-badge { font: 800 24px/1 var(--sans); }
+  .plan-head h3 { font: 700 20px/1.2 var(--sans); }
+  .plan-brand strong { font: 700 16px/1.25 var(--sans); }
+  .ppill b { font-weight: 700; }
+  .sheet h2, .modal h3 { font-size: 22px; font-weight: 700; }
+  .swatch { font-weight: 600; }
+
+  /* Logo lockup: crest, then the name in italic Cormorant, then "Closet" set small and
+     tracked between two hairlines, like a boutique label. */
+  .logo { margin: 2px 0 0; display: grid; justify-items: center; gap: 4px; font-weight: normal; letter-spacing: 0; }
+  .logo-name { font: italic 600 50px/.95 var(--logo); color: var(--ink); letter-spacing: -.005em; }
+  .logo-sub { display: flex; align-items: center; gap: 10px; font: 600 12.5px/1 var(--sans); letter-spacing: .42em; text-transform: uppercase; color: var(--rose); padding-left: .42em; }
+  .logo-sub::before, .logo-sub::after { content: ""; width: 34px; height: 1px; background: currentColor; opacity: .55; }
+  .hero .crest svg { width: 70px; height: 76px; }
+  .hero p { margin-top: 12px; font-size: 14px; }
 
   /* Closet: collapsible brands with a compact tile grid */
   .fold-all { display: flex; gap: 12px; justify-content: flex-end; margin: 4px 0 -4px; }
@@ -386,7 +394,7 @@
   .brand-fold > summary { list-style: none; cursor: pointer; margin: 0; padding: 16px 2px 14px; border-bottom: 0; display: flex; align-items: center; gap: 10px; }
   .brand-fold > summary::-webkit-details-marker { display: none; }
   .brand-fold > summary h2 { font-size: 19px; flex: none; }
-  .brand-meta { flex: 1; color: var(--taupe); font-size: 13.5px; font-weight: 600; text-align: right; }
+  .brand-meta { flex: 1; color: var(--taupe); font-size: 13.5px; font-weight: 500; text-align: right; }
   .chev { width: 9px; height: 9px; border-right: 2px solid var(--taupe); border-bottom: 2px solid var(--taupe); transform: rotate(45deg); margin: -4px 4px 0 2px; transition: transform .15s; flex: none; }
   .brand-fold[open] > summary .chev { transform: rotate(-135deg); margin-top: 4px; }
   .brand-fold > summary:focus-visible { outline: 2px solid var(--rose); outline-offset: 2px; }
@@ -395,14 +403,14 @@
   @media (min-width: 560px) { .grid { grid-template-columns: repeat(4, 1fr); } }
   .print { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
   .print img { aspect-ratio: 1; border-radius: 0; }
-  .print span { padding: 7px 8px 9px; font: 700 13px/1.25 var(--sans); }
-  .print small { font: 600 11.5px/1.35 var(--sans); }
-  .pill { font: 700 10.5px/1.5 var(--sans); }
+  .print span { padding: 7px 8px 9px; font: 600 13px/1.3 var(--sans); }
+  .print small { font: 500 11.5px/1.35 var(--sans); }
+  .pill { font: 600 10.5px/1.5 var(--sans); }
   @media (prefers-reduced-motion: reduce) { .chev { transition: none; } }
 </style>
 </head>
 <body>
   <div id="app"></div>
-  <script type="module" src="app.js?v=1004-0828"></script>
+  <script type="module" src="app.js?v=1004-0834"></script>
 </body>
 </html>
