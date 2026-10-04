@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1004-1011";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-1011";
-const BUILD = "1004-1011"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1004-1047";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-1047";
+const BUILD = "1004-1047"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = ["wishlist", "closet", "sizes"];
@@ -309,6 +309,7 @@ function closetResults() {
 // Brands open/closed in the closet. Collapsed by default so a long closet is easy to scan;
 // searching or filtering opens everything that matches.
 const openBrands = new Set();
+let favsOpen = true; // "Her Favorites" starts open; remembered while the page is open
 function printGroups(prints, { forceOpen = false } = {}) {
   // Group by brand key so spelling variants share one section. The section is named after
   // her Favorite Brands entry if there is one, else the most common spelling.
@@ -362,8 +363,9 @@ function favoritesView(prints) {
   }
   const hasStyle = (style) => prints.filter((p) => !p.outgrown && (p.types || []).some((t) => t.toLowerCase() === style.toLowerCase()));
   return `
-    <section class="favs" aria-label="Her favorites">
-      <div class="favs-head"><h2>★ Her Favorites</h2>${owner() ? `<button class="link" data-act="edit-favstyles">Edit Styles</button>` : ""}</div>
+    <details class="favs" data-favs ${favsOpen ? "open" : ""}>
+      <summary class="favs-head"><h2>★ Her Favorites</h2><span class="brand-meta">${[favPrints.length && `${favPrints.length} ${favPrints.length === 1 ? "Print" : "Prints"}`, favStyles.length && `${favStyles.length} ${favStyles.length === 1 ? "Style" : "Styles"}`].filter(Boolean).join(" · ")}</span><span class="chev" aria-hidden="true"></span></summary>
+      ${owner() ? `<div class="favs-edit"><button class="link" data-act="edit-favstyles">Edit Styles</button></div>` : ""}
       <p class="muted">Great gift ideas: a new style in a print she loves, or a style she loves in a print she doesn't have yet.</p>
       ${favPrints.map((p) => `
         <div class="fav-row">
@@ -385,7 +387,7 @@ function favoritesView(prints) {
             : "Loves these, in any print!"}</div>
         </div>`;
       }).join("")}
-    </section>`;
+    </details>`;
 }
 
 function favStylesSheet() {
@@ -1245,6 +1247,7 @@ $app.addEventListener("input", (ev) => {
 });
 $app.addEventListener("toggle", (ev) => { // remember which brands are open across re-renders
   const d = ev.target;
+  if (d.dataset?.favs !== undefined) { favsOpen = d.open; return; }
   if (d.classList?.contains("person-fold")) { if (d.open) openPeople.add(d.dataset.person); else openPeople.delete(d.dataset.person); return; }
   if (d.classList?.contains("brand-fold")) { if (d.open) openBrands.add(d.dataset.brand); else openBrands.delete(d.dataset.brand); }
 }, true);

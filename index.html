@@ -438,10 +438,16 @@
   .lightbox figcaption span { opacity: .8; }
   .lightbox figcaption .link { color: #F4D9D6; justify-self: center; }
   .lb-close { position: absolute; top: calc(10px + env(safe-area-inset-top)); right: 12px; width: 44px; height: 44px; border-radius: 50%; border: 0; background: rgba(255,255,255,.14); color: #fff; font-size: 26px; line-height: 1; cursor: pointer; }
+  details.favs > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; }
+  details.favs > summary::-webkit-details-marker { display: none; }
+  details.favs > summary h2 { flex: none; }
+  details.favs:not([open]) { padding-bottom: 14px; }
+  details.favs[open] > summary .chev { transform: rotate(-135deg); margin-top: 4px; }
+  .favs-edit { display: flex; justify-content: flex-end; margin: 2px 0 -4px; }
 </style>
 </head>
 <body>
   <div id="app"></div>
-  <script type="module" src="app.js?v=1004-1011"></script>
+  <script type="module" src="app.js?v=1004-1047"></script>
 </body>
 </html>
