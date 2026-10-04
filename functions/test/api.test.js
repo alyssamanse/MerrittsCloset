@@ -419,3 +419,26 @@ test("plans: owner-only, validated, capped", async () => {
   const d = await call("deletePlan", { id: "plan_christmas" }, o);
   assert.ok(!d.body.data.plans.some((p) => p.id === "plan_christmas"));
 });
+
+test("family wishlist: owner adds, guests claim anonymously, validated and capped", async () => {
+  const o = { token: "owner" };
+  const item = { id: "fam_item_0001", person: "Penny", category: "other", title: "Squeaky Duck", brand: "BARK", url: "https://shop.example/products/duck" };
+  assert.equal((await call("upsertFamilyItem", { item })).status, 403, "guests can't add");
+  assert.equal((await call("upsertFamilyItem", { item: { ...item, person: "" } }, o)).status, 400);
+  assert.equal((await call("upsertFamilyItem", { item: { ...item, category: "toy" } }, o)).status, 400);
+  assert.equal((await call("upsertFamilyItem", { item: { ...item, sizes: Array(9).fill("M") } }, o)).status, 400);
+  assert.equal((await call("upsertFamilyItem", { item: { ...item, extra: 1 } }, o)).status, 400);
+  const r = await call("upsertFamilyItem", { item: { ...item, id: "fam_item_0002", person: "Lys", category: "clothes", title: "Linen Shirt", sizes: ["M", "m", "Tall"] } }, o);
+  assert.deepEqual(r.body.data.family.fam_item_0002.sizes, ["M", "Tall"], "sizes de-duplicated");
+  await call("upsertFamilyItem", { item }, o);
+  // Claims go through the same reducer as wishlist claims (HTTP guest bucket is used up by earlier tests).
+  const k = key();
+  const st = structuredClone(store.doc);
+  const claimed = logic.reduce(st, "claim", { itemId: "fam_item_0001", key: k }, { isOwner: false, now: 5e9 });
+  assert.ok(claimed.state.claims.fam_item_0001.h, "guests can claim family items");
+  assert.throws(() => logic.reduce(claimed.state, "claim", { itemId: "fam_item_0001", key: key() }, { isOwner: false, now: 5e9 + 10 }), /already claimed/);
+  store.doc = claimed.state;
+  const d = await call("deleteFamilyItem", { id: "fam_item_0001" }, o);
+  assert.ok(!d.body.data.family.fam_item_0001 && !d.body.data.claims.fam_item_0001, "delete clears the claim too");
+  assert.equal((await call("deleteFamilyItem", { id: "fam_item_0002" })).status, 403);
+});

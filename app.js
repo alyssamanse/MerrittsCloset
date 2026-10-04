@@ -1,9 +1,10 @@
-import { CONFIG } from "./config.js?v=1004-0834";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-0834";
-const BUILD = "1004-0834"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1004-0906";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-0906";
+const BUILD = "1004-0906"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
-const TABS = ["wishlist", "ideas", "closet", "sizes"];
+const MAIN_TABS = ["wishlist", "ideas", "closet", "sizes"];
+const TABS = [...MAIN_TABS, "family"]; // "family" is reached from the footer link, not the tab bar
 const TAB_LABEL = { wishlist: "Wishlist", ideas: "Gift Ideas", closet: "Closet", sizes: "Sizes" };
 const OTHER_TYPES = ["Blanket", "Swaddle", "Lovey", "Bedding", "Bath", "Feeding", "Books", "Room decor", "Gear", "Keepsake"];
 const TOY_TYPES = ["Rattle", "Teether", "Stacker", "Blocks", "Book", "Plush", "Bath", "Music", "Activity", "Push & ride", "Puzzle", "Pretend play", "Outdoor"];
@@ -37,7 +38,8 @@ const catOf = (i) => (i.category === "toy" || i.category === "other" ? i.categor
 const hasCat = (t) => (t.category === "other" ? "other" : "toy");                             // "what she has" non-clothes
 const isToy = (i) => catOf(i) !== "clothes"; // toys and other things share the no-size layout
 const CAT_FILTER = { clothes: "clothes", toy: "toys", other: "other" };
-const filter = { wishlist: "all", closet: "clothes", fit: "all", plan: "" }; // view-only, no requests
+const filter = { wishlist: "all", closet: "clothes", fit: "all", plan: "", person: "all" };
+let familyQuery = ""; // view-only, no requests
 let closetQuery = ""; // closet search; filters what's already loaded, never makes a request
 const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[’']/g, "");
 const matches = (q, ...fields) => {
@@ -115,10 +117,11 @@ const armedLabel = (key, normal, confirm) => (armed.has(key) ? confirm : normal)
 // ── render ───────────────────────────────────────────────────────────
 function render() {
   if (document.querySelector(".sheet-bg")) return; // don't wipe a form being filled in
-  const searching = document.activeElement?.id === "closet-search";
+  const searchId = ["closet-search", "family-search"].find((x) => document.activeElement?.id === x);
+  const searching = !!searchId;
   const caret = searching ? document.activeElement.selectionStart : null;
   queueMicrotask(() => {
-    const box = searching && document.getElementById("closet-search");
+    const box = searching && document.getElementById(searchId);
     if (box) { box.focus(); try { box.setSelectionRange(caret, caret); } catch {} }
   });
   const name = esc(CONFIG.babyName);
@@ -130,11 +133,12 @@ function render() {
       <p>Her wishes, her favorites, and what she already has</p>
     </header>
     <nav class="tabs" role="tablist">
-      ${TABS.map((t) => `<button class="tab" role="tab" aria-selected="${tab === t}" data-tab="${t}">${TAB_LABEL[t]}</button>`).join("")}
+      ${MAIN_TABS.map((t) => `<button class="tab" role="tab" aria-selected="${tab === t}" data-tab="${t}">${TAB_LABEL[t]}</button>`).join("")}
     </nav>
     <main>${adminPanel()}${body()}</main>
     ${owner() && S.status === "ok" ? `<button class="btn fab" data-act="add">+ Add</button>` : ""}
     <footer>
+      ${tab !== "family" && (CONFIG.family || []).length ? `<div class="family-link"><button class="link" data-act="go-tab" data-to="family">Shopping for the rest of the family?</button></div>` : ""}
       <button class="link quiet" data-act="share">Share</button><span class="muted"> · </span>
       <button class="link quiet" data-act="refresh" ${dis("refresh")}>Refresh</button>
       ${S.user ? `<span class="muted"> · ${owner() ? "Editing on" : "Signed in"} · </span><button class="link" data-act="signout">Sign out</button>` : ""}
@@ -163,7 +167,7 @@ function body() {
     : `<div class="empty">This list isn't available right now.</div>`;
   if (S.status === "unavailable") return `<div class="empty">This list isn't available right now.</div>`;
   if (S.status === "empty") return `<div class="empty">${owner() ? "Setting up your list…" : "This list isn't available right now."}</div>`;
-  return tab === "wishlist" ? wishlistView() : tab === "ideas" ? ideasView() : tab === "closet" ? closetView() : sizesView();
+  return tab === "family" ? familyView() : tab === "wishlist" ? wishlistView() : tab === "ideas" ? ideasView() : tab === "closet" ? closetView() : sizesView();
 }
 
 const filterChips = (which, options) => `
@@ -573,15 +577,12 @@ function sortedPlans() {
   return [...(S.data?.plans || [])].sort((a, b) => rank(a) - rank(b) || (planDate(a)?.getTime() || 0) - (planDate(b)?.getTime() || 0));
 }
 function planPills(plan) {
-  const byBrand = new Map();
-  for (const r of plan.rows || []) { if (!byBrand.has(r.brand)) byBrand.set(r.brand, []); byBrand.get(r.brand).push(r); }
-  if (!byBrand.size) return `<p class="muted">${owner() ? "No sizes yet. Tap Edit to add some." : "Sizes coming soon."}</p>`;
-  return [...byBrand].map(([brand, rows]) => `
-    <div class="plan-brand"><strong>${esc(brand)}</strong>
-      <div class="plan-pills">${rows.map((r) => r.skip
-        ? `<span class="ppill skip">No more ${esc(r.style)}</span>`
-        : `<span class="ppill">${r.style ? `<b>${esc(r.style)}</b>` : "Anything"}${r.size ? ` · ${esc(r.size)}` : ""}</span>`).join("")}</div>
-    </div>`).join("");
+  // Older occasions may list the same style per brand; show each style + size once.
+  const seen = new Set();
+  const rows = (plan.rows || []).filter((r) => { const k = `${r.skip}|${(r.style || "").toLowerCase()}|${r.size}`; if (seen.has(k)) return false; seen.add(k); return true; });
+  if (!rows.length) return `<p class="muted">${owner() ? "No sizes yet. Tap Edit to add some." : "Sizes coming soon."}</p>`;
+  const want = rows.filter((r) => !r.skip), skip = rows.filter((r) => r.skip);
+  return `<div class="plan-pills">${want.map((r) => `<span class="ppill">${r.style ? `<b>${esc(r.style)}</b>` : "Anything"}${r.size ? ` · ${esc(r.size)}` : ""}</span>`).join("")}${skip.map((r) => `<span class="ppill skip">No more ${esc(r.style)}</span>`).join("")}</div>`;
 }
 function planCard(plan, { compact = false } = {}) {
   return `<div class="plan-card">
@@ -596,7 +597,7 @@ function plansSection() {
   if (!plans.length) {
     return owner()
       ? `<section class="plans"><div class="section-title"><h2>Shopping Ahead</h2></div>
-         <p class="muted">Gifts for later need bigger sizes. Add an occasion and list the style and size per brand.</p>
+         <p class="muted">Gifts for later need bigger sizes. Add an occasion and list the size to buy for each style.</p>
          <div class="filters">${Object.entries(PRESETS).map(([k, v]) => `<button class="filter" data-act="add-plan" data-preset="${k}">+ ${v}</button>`).join("")}</div></section>`
       : "";
   }
@@ -613,12 +614,10 @@ function planSheet(existing) {
   const isNew = !existing || existing.isNew;
   let rows = (plan.rows || []).map((r) => ({ ...r }));
   const styles = typesFor("clothes");
-  const brandList = () => brands().map((b) => `<option value="${esc(b.name)}">`).join("");
   const rowHtml = (r, i) => `
     <div class="plan-row${r.skip ? " is-skip" : ""}" data-i="${i}">
-      <input class="in" data-f="brand" list="dl-plan-brands" maxlength="60" value="${esc(r.brand)}" placeholder="Brand" aria-label="Brand" />
       <select class="in" data-f="style" aria-label="Style"><option value="">Any style</option>${[...new Set([...(r.style ? [r.style] : []), ...styles])].map((s) => `<option ${s === r.style ? "selected" : ""}>${esc(s)}</option>`).join("")}</select>
-      <input class="in" data-f="size" list="dl-plan-sizes" maxlength="20" value="${esc(r.size)}" placeholder="Size" aria-label="Size" ${r.skip ? "disabled" : ""} />
+      ${sizeSelect(`data-f="size" aria-label="Size" ${r.skip ? "disabled" : ""}`, r.size, { blank: "Size" })}
       <label class="skip-toggle"><input type="checkbox" data-f="skip" ${r.skip ? "checked" : ""}> Won't need</label>
       <button class="icon-btn danger" data-m="remove" aria-label="Remove line">×</button>
     </div>`;
@@ -631,12 +630,10 @@ function planSheet(existing) {
      <input class="in" id="pl-date" type="date" value="${esc(plan.date)}" />
      <label class="f" for="pl-note">Note for gifters (optional)</label>
      <input class="in" id="pl-note" maxlength="160" value="${esc(plan.note)}" placeholder="She'll be walking by then, soft shoes welcome!" />
-     <div class="label-row"><label class="f">Style and size by brand</label></div>
+     <div class="label-row"><label class="f">Size for each style</label></div>
      <p class="muted small">Tick <b>Won't need</b> for styles she'll have outgrown, like zippys.</p>
      <div class="plan-rows"></div>
      <button class="btn ghost small" data-m="add">+ Add line</button>
-     <datalist id="dl-plan-brands">${brandList()}</datalist>
-     <datalist id="dl-plan-sizes">${SIZES.map((x) => `<option value="${esc(x)}">`).join("")}</datalist>
      <div class="err sheet-err" hidden></div>
      <div class="sheet-actions">
        ${isNew ? "" : `<button class="link danger" data-m="delete-plan">Delete</button>`}
@@ -653,12 +650,12 @@ function planSheet(existing) {
         if (f === "skip") { r.skip = ev.target.checked; if (r.skip) r.size = ""; draw(); }
         else if (f) r[f] = ev.target.value;
       });
-      wrap.addEventListener("change", (ev) => { if (ev.target.dataset.f === "style") rows[Number(ev.target.closest(".plan-row").dataset.i)].style = ev.target.value; });
+      wrap.addEventListener("change", (ev) => { const f = ev.target.dataset.f; if (f === "style" || f === "size") rows[Number(ev.target.closest(".plan-row").dataset.i)][f] = ev.target.value; });
       wrap.addEventListener("click", (ev) => {
         if (ev.target.closest('[data-m="remove"]')) { rows.splice(Number(ev.target.closest(".plan-row").dataset.i), 1); draw(); }
       });
       el.querySelector('[data-m="add"]').addEventListener("click", () => {
-        rows.push({ brand: rows.at(-1)?.brand || brands()[0]?.name || "", style: "", size: "", skip: false }); draw();
+        rows.push({ style: "", size: "", skip: false }); draw();
         wrap.querySelector(".plan-row:last-child select")?.focus();
       });
       el.querySelector('[data-act="cancel"]').addEventListener("click", () => closeSheet());
@@ -671,13 +668,9 @@ function planSheet(existing) {
       wireSave(el, async () => {
         const name = el.querySelector("#pl-name").value.trim();
         if (!name) throw new Error("Give the occasion a name.");
-        const clean = rows.map((r) => ({ brand: r.brand.trim(), style: r.style || "", size: r.skip ? "" : r.size.trim(), skip: !!r.skip }))
-          .filter((r) => r.brand || r.style || r.size);
-        for (const r of clean) {
-          if (!r.brand) throw new Error("Every line needs a brand.");
-          if (r.skip && !r.style) throw new Error(`Pick which style ${r.brand} won't need.`);
-          if (!r.skip && !r.style && !r.size) throw new Error(`Add a style or size for ${r.brand}.`);
-        }
+        const clean = rows.map((r) => ({ style: r.style || "", size: r.skip ? "" : (r.size || "").trim(), skip: !!r.skip }))
+          .filter((r) => r.style || r.size);
+        for (const r of clean) if (r.skip && !r.style) throw new Error("Pick which style she won't need.");
         await store.setPlan({ id: plan.id, name, date: el.querySelector("#pl-date").value || "", note: el.querySelector("#pl-note").value.trim(), rows: clean });
         filter.plan = plan.id;
         return "Saved";
@@ -734,6 +727,175 @@ function ideasView() {
   return `
     <div class="note">Not sure what to get? Start here. Before buying a print, <button class="link inline" data-act="go-tab" data-to="closet" data-focus="closet-search">search her closet</button> to make sure she doesn't have it.</div>
     ${sections.join("") || `<div class="empty">Gift ideas will show up here once there's a wishlist or some favorites.</div>`}`;
+}
+
+// ── family wishlist (Lys, Michael, Penny…) ──────────────────────────
+const people = () => {
+  const named = CONFIG.family || [];
+  const extra = [...new Set(list(S.data?.family).map((i) => i.person))].filter((p) => !named.includes(p));
+  return [...named, ...extra];
+};
+const openPeople = new Set();
+function familyView() {
+  const all = list(S.data.family);
+  return `
+    <div class="back-row"><button class="link" data-act="go-tab" data-to="wishlist">← ${esc(CONFIG.babyName)}'s Wishlist</button></div>
+    <div class="section-title"><h2>The Family Wishlist</h2><span class="muted">${all.filter((i) => !isClaimed(i.id)).length} still open</span></div>
+    <div class="note">Gifts for ${esc(people().join(", ").replace(/, ([^,]*)$/, " and $1"))}. Tap <b>I'll get this</b> so nobody doubles up. It's anonymous.</div>
+    <div class="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+      <input type="search" id="family-search" class="in" value="${esc(familyQuery)}" placeholder="Search the family wishlist" aria-label="Search the family wishlist" autocomplete="off" enterkeyhint="search" />
+    </div>
+    ${filterChips("person", [["all", "Everyone", all.length], ...people().map((p) => [p, p, all.filter((i) => i.person === p).length])])}
+    <div id="family-results">${familyResults()}</div>`;
+}
+function familyResults() {
+  const q = familyQuery.trim();
+  const all = list(S.data.family)
+    .filter((i) => filter.person === "all" || i.person === filter.person)
+    .filter((i) => !q || matches(q, i.title, i.brand, i.person, i.sizes || [], i.notes, i.category === "clothes" ? "clothes" : ""));
+  const who = people().filter((p) => filter.person === "all" || p === filter.person);
+  const sections = who.map((p) => {
+    const mine = all.filter((i) => i.person === p)
+      .sort((a, b) => isClaimed(a.id) - isClaimed(b.id) || (a.priority === "most" ? 0 : 1) - (b.priority === "most" ? 0 : 1) || (a.createdAt || 0) - (b.createdAt || 0));
+    if (q && !mine.length) return "";
+    const open = q || who.length === 1 || openPeople.has(p) || !openPeople.size;
+    return `<details class="brand-fold person-fold" data-person="${esc(p)}" ${open ? "open" : ""}>
+      <summary class="brand-head"><h2>${esc(p)}</h2><span class="brand-meta">${mine.length} ${mine.length === 1 ? "Item" : "Items"}</span><span class="chev" aria-hidden="true"></span></summary>
+      <div class="fam-list">${mine.length ? mine.map(familyCard).join("") : `<p class="muted">Nothing on ${esc(p)}'s list yet.</p>`}</div>
+    </details>`;
+  }).join("");
+  return sections || `<div class="empty">Nothing matches “${esc(q)}”.</div>`;
+}
+function familyCard(i) {
+  const claimed = isClaimed(i.id), mine = S.mine.has(i.id);
+  const link = safeUrl(i.url) && !i.url.startsWith("data:") ? i.url : "";
+  const k = (a) => `${a}:${i.id}`;
+  const chips = [
+    ...(i.category === "clothes" ? (i.sizes || []).map((z) => `<span class="chip">Size ${esc(z)}</span>`) : []),
+    i.price && `<span class="chip tan">${esc(i.price)}</span>`,
+  ].filter(Boolean);
+  let actions;
+  if (owner()) {
+    actions = `${claimed ? `<span class="status taken">Claimed</span><button class="link" data-act="reset" data-id="${i.id}" ${dis(k("reset"))}>${armedLabel(k("reset"), "Reset", "Tap again to reset")}</button>` : `<span class="status taken">Open</span>`}
+      <span class="spacer"></span><button class="link" data-act="edit-family" data-id="${i.id}">Edit</button>
+      <button class="btn small soft" data-act="family-got" data-id="${i.id}" ${dis(k("fam-got"))}>${armedLabel(k("fam-got"), "Got it", "Tap again to remove")}</button>`;
+  } else if (mine) {
+    actions = `<span class="status">✓ You're getting this</span><span class="spacer"></span><button class="btn small ghost" data-act="unclaim" data-id="${i.id}" ${dis(k("claim"))}>${busy.has(k("claim")) ? "Undoing…" : "Undo"}</button>`;
+  } else if (claimed) {
+    actions = `<span class="status taken">Someone's got this one</span>`;
+  } else {
+    actions = `<span class="spacer"></span><button class="btn small" data-act="claim" data-id="${i.id}" ${dis(k("claim"))}>${busy.has(k("claim")) ? "Saving…" : "I'll get this"}</button>`;
+  }
+  const pic = img(i.image, "thumb", i.title);
+  return `
+    <article class="card ${claimed ? "claimed" : ""}">
+      ${i.priority === "most" && !claimed ? `<span class="ribbon">Most Wanted</span>` : ""}
+      ${link ? `<a href="${esc(link)}" target="_blank" rel="noopener noreferrer">${pic}</a>` : pic}
+      <div class="card-body">
+        <h3>${link ? `<a class="title-link" href="${esc(link)}" target="_blank" rel="noopener noreferrer">${esc(i.title)}</a>` : esc(i.title)}</h3>
+        ${i.brand ? `<div class="meta">${esc(i.brand)}</div>` : ""}
+        ${chips.length ? `<div class="chips">${chips.join("")}</div>` : ""}
+        ${i.notes ? `<div class="meta" style="margin-top:6px">${esc(i.notes)}</div>` : ""}
+        ${link ? `<a class="link" style="padding-left:0" href="${esc(link)}" target="_blank" rel="noopener noreferrer">View item ↗</a>` : ""}
+      </div>
+      <div class="actions">${actions}</div>
+    </article>`;
+}
+function familySheet(existing = null) {
+  const e = existing || {};
+  let person = e.person || (filter.person !== "all" ? filter.person : people()[0] || "");
+  let category = e.category || "clothes";
+  let sizes = [...(e.sizes || [])];
+  let offered = [];
+  const id = e.id || newId();
+  openSheet(
+    `<h2>${existing ? "Edit Family Wish" : "Add a Family Wish"}</h2>
+     <label class="f">For</label>
+     <div class="seg" data-g="person">${people().map((p) => `<button type="button" data-v="${esc(p)}" aria-pressed="${p === person}">${esc(p)}</button>`).join("")}</div>
+     <div class="seg" data-g="category"><button type="button" data-v="clothes" aria-pressed="${category === "clothes"}">Clothes</button><button type="button" data-v="other" aria-pressed="${category === "other"}">Other</button></div>
+     <label class="f" for="fm-url">Product link</label>
+     <div class="import"><input class="in" id="fm-url" maxlength="600" value="${esc(e.url || "")}" placeholder="Paste a link to the product" inputmode="url" /><button class="btn small" data-m="fill">Fill in</button></div>
+     <div class="err" id="fm-import-err" hidden></div>
+     <label class="f" for="fm-title">Name</label><input class="in" id="fm-title" maxlength="120" value="${esc(e.title || "")}" placeholder="Linen button-down" />
+     <label class="f" for="fm-brand">Brand</label><input class="in" id="fm-brand" maxlength="60" value="${esc(e.brand || "")}" />
+     <div data-sizes>
+       <div class="label-row"><label class="f">Sizes</label></div>
+       <div class="type-picker" id="fm-sizes"></div>
+       <div class="add-row" style="margin-top:8px"><input class="in" id="fm-size-new" maxlength="20" placeholder="Add a size, like M or 32x30" /><button class="btn small ghost" data-m="add-size">Add</button></div>
+     </div>
+     <label class="f" for="fm-price">Price</label><input class="in" id="fm-price" maxlength="20" value="${esc(e.price || "")}" placeholder="$48" />
+     <label class="f" for="fm-priority">Priority</label>
+     <select class="in" id="fm-priority"><option value="nice" ${e.priority !== "most" ? "selected" : ""}>Nice to have</option><option value="most" ${e.priority === "most" ? "selected" : ""}>Most wanted</option></select>
+     <label class="f" for="fm-notes">Note for gifters (optional)</label><input class="in" id="fm-notes" maxlength="200" value="${esc(e.notes || "")}" />
+     <label class="f" for="fm-image">Image address</label><input class="in" id="fm-image" maxlength="600" value="${esc(e.image || "")}" placeholder="https://…" />
+     <div class="err sheet-err" hidden></div>
+     <div class="sheet-actions">
+       ${existing ? `<button class="link danger" data-act="delete">Delete</button>` : ""}
+       <span class="spacer"></span>
+       <button class="btn ghost" data-act="cancel">Cancel</button>
+       <button class="btn" data-act="save">Save</button>
+     </div>`,
+    (el) => {
+      const $ = (sel) => el.querySelector(sel);
+      const drawSizes = () => {
+        const all = [...new Set([...sizes, ...offered])];
+        $("#fm-sizes").innerHTML = all.length
+          ? all.map((z) => `<button type="button" class="type-opt" data-size="${esc(z)}" aria-pressed="${sizes.includes(z)}">${esc(z)}</button>`).join("")
+          : `<span class="muted">Fill in from a link to pick from the store's sizes, or add one below.</span>`;
+        $("[data-sizes]").hidden = category !== "clothes";
+      };
+      drawSizes();
+      el.querySelectorAll(".seg[data-g]").forEach((g) => g.addEventListener("click", (ev) => {
+        const b = ev.target.closest("[data-v]"); if (!b) return;
+        g.querySelectorAll("[data-v]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+        if (g.dataset.g === "person") person = b.dataset.v; else { category = b.dataset.v; drawSizes(); }
+      }));
+      $("#fm-sizes").addEventListener("click", (ev) => {
+        const b = ev.target.closest("[data-size]"); if (!b) return;
+        const z = b.dataset.size;
+        sizes = sizes.includes(z) ? sizes.filter((x) => x !== z) : [...sizes, z].slice(0, 8);
+        drawSizes();
+      });
+      const addSize = () => { const v = $("#fm-size-new").value.trim(); if (v && !sizes.includes(v)) sizes = [...sizes, v].slice(0, 8); $("#fm-size-new").value = ""; drawSizes(); };
+      $('[data-m="add-size"]').addEventListener("click", addSize);
+      $("#fm-size-new").addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); addSize(); } });
+      const fill = $('[data-m="fill"]');
+      fill.addEventListener("click", async () => {
+        if (fill.disabled) return;
+        const errEl = $("#fm-import-err"); errEl.hidden = true;
+        const url = $("#fm-url").value.trim();
+        if (!/^https?:\/\//i.test(url)) { errEl.textContent = "Paste a full link starting with https://"; errEl.hidden = false; return; }
+        fill.disabled = true; fill.textContent = "Reading…";
+        try {
+          const r = await store.importLink(url);
+          const put = (sel, v) => { if (v && !$(sel).value) $(sel).value = v; };
+          put("#fm-title", r.title); put("#fm-brand", r.brand); put("#fm-price", r.price);
+          if (r.image) $("#fm-image").value = r.image;
+          offered = (r.sizes || []).slice(0, 30);
+          if (offered.length && category !== "clothes") { category = "clothes"; el.querySelectorAll('.seg[data-g="category"] [data-v]').forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.v === "clothes"))); }
+          drawSizes();
+          if (!r.title && !r.image) throw new Error("That store didn't share any details. Fill them in below.");
+        } catch (err) { errEl.textContent = err.message; errEl.hidden = false; }
+        finally { fill.disabled = false; fill.textContent = "Fill in"; }
+      });
+      $('[data-act="cancel"]').addEventListener("click", () => closeSheet());
+      wireDelete(el, () => store.deleteFamilyItem(id));
+      wireSave(el, async () => {
+        const title = $("#fm-title").value.trim();
+        if (!person) throw new Error("Choose who it's for.");
+        if (!title) throw new Error("Give it a name.");
+        await store.upsertFamilyItem({
+          id, person, category, title, brand: $("#fm-brand").value.trim(),
+          sizes: category === "clothes" ? sizes : [], price: $("#fm-price").value.trim(),
+          priority: $("#fm-priority").value, notes: $("#fm-notes").value.trim(),
+          url: $("#fm-url").value.trim(), image: $("#fm-image").value.trim(),
+        });
+        filter.person = filter.person === "all" ? "all" : person;
+        return "Saved";
+      });
+    }
+  );
 }
 
 // ── get the latest version (for a stale home-screen app) ─────────────
@@ -933,6 +1095,21 @@ function closeSheet(rerender = true) {
   document.body.style.overflow = "";
   if (rerender) render();
 }
+// Clothing sizes offered in dropdowns (occasions, brand sizes, wishlist clothes).
+const CLOTHING_SIZES = ["6–9M", "6–12M", "12–18M", "18–24M", "2T", "3T", "4T"];
+const dash = (v) => String(v || "").trim().replace(/(\d)\s*-\s*(\d)/g, "$1–$2");
+function sizeSelect(attrs, current = "", { blank = "Choose a size" } = {}) {
+  const cur = dash(current);
+  const opts = [...(cur && !CLOTHING_SIZES.includes(cur) ? [cur] : []), ...CLOTHING_SIZES];
+  return `<select class="in" ${attrs}><option value="">${esc(blank)}</option>${opts.map((x) => `<option ${x === cur ? "selected" : ""}>${esc(x)}</option>`).join("")}</select>`;
+}
+// Set a size dropdown's value, adding the option first if it isn't in the list.
+function setSize(sel, v) {
+  const val = dash(v);
+  if (!sel || !val) return;
+  if (![...sel.options].some((o) => o.value === val)) sel.add(new Option(val, val), 1);
+  sel.value = val;
+}
 const sizeOptions = (extra = []) => [...new Set([...extra, ...SIZES])].map((s) => `<option value="${esc(s)}">`).join("");
 const brandOptions = () => brands().map((b) => `<option value="${esc(b.name)}">`).join("");
 
@@ -1021,7 +1198,7 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
       <div class="type-picker" data-cat="clothes" role="group" aria-label="Styles she has">${typePills("clothes", e.types || [])}</div>
     </div>
     <div class="row" data-show="wc wt wo">
-      <div data-show="wc"><label class="f" for="f-size">Size</label><input class="in" id="f-size" name="size" maxlength="20" list="dl-sizes" value="${esc(e.size || "")}" placeholder="12–18M" /></div>
+      <div data-show="wc"><label class="f" for="f-size">Size</label>${sizeSelect('id="f-size" name="size"', e.size || "")}</div>
       <div data-show="wt"><label class="f" for="f-age">Age range</label><input class="in" id="f-age" name="ageRange" maxlength="20" value="${esc(e.ageRange || "")}" placeholder="6m+" /></div>
       <div><label class="f" for="f-price">Price</label><input class="in" id="f-price" name="price" maxlength="20" value="${esc(e.price || "")}" placeholder="$38" /></div>
     </div>
@@ -1072,7 +1249,7 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
     f("image").addEventListener("change", () => (el.querySelector("#pv").src = safeUrl(f("image").value) || PLACEHOLDER));
     f("brand").addEventListener("change", () => {
       const b = brandByName(f("brand").value);
-      if (cat === "clothes" && b?.currentSize && !f("size").value) f("size").value = b.currentSize;
+      if (cat === "clothes" && b?.currentSize && !f("size").value) setSize(f("size"), b.currentSize);
     });
 
     // Link import runs only on tap (never per keystroke) and is locked while running.
@@ -1093,9 +1270,9 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
         fill("price", r.price);
         if (r.image) { f("image").value = r.image; el.querySelector("#pv").src = r.image; }
         if (cat === "clothes") {
-          if (r.sizes?.length) el.querySelector("#dl-sizes").innerHTML = sizeOptions(r.sizes);
+          // (store sizes vary by brand; the dropdown keeps to her standard sizes)
           const b = brandByName(f("brand").value);
-          if (b?.currentSize && !f("size").value) f("size").value = b.currentSize;
+          if (b?.currentSize && !f("size").value) setSize(f("size"), b.currentSize);
         }
         if (!r.title && !r.image) throw new Error("That store didn't share any details. Fill them in below.");
       } catch (err) {
@@ -1150,7 +1327,7 @@ function brandSheet(existing = null) {
   openSheet(
     `<h2>${existing ? "Edit Brand" : "Add Brand"}</h2>
      <label class="f" for="b-name">Brand</label><input class="in" id="b-name" name="name" maxlength="60" value="${esc(b.name || "")}" placeholder="Little Sleepies" />
-     <label class="f" for="b-size">Current size</label><input class="in" id="b-size" name="currentSize" maxlength="20" list="dl-sizes" value="${esc(b.currentSize || "")}" placeholder="6–12M" />
+     <label class="f" for="b-size">Current size</label>${sizeSelect('id="b-size" name="currentSize"', b.currentSize || "")}
      <label class="f" for="b-notes">Sizing note (optional)</label><input class="in" id="b-notes" name="notes" maxlength="140" value="${esc(b.notes || "")}" placeholder="Runs small, size up" />
      <datalist id="dl-sizes">${sizeOptions()}</datalist>
      <div class="err sheet-err" hidden></div>
@@ -1232,6 +1409,12 @@ function importSheet() {
 
 // ── events (one delegated listener, attached once) ───────────────────
 $app.addEventListener("input", (ev) => {
+  if (ev.target.id === "family-search") {
+    familyQuery = ev.target.value.slice(0, 60);
+    const out = document.getElementById("family-results");
+    if (out) out.innerHTML = familyResults();
+    return;
+  }
   if (ev.target.id !== "closet-search") return;
   closetQuery = ev.target.value.slice(0, 60);
   const out = document.getElementById("closet-results");
@@ -1239,10 +1422,11 @@ $app.addEventListener("input", (ev) => {
 });
 $app.addEventListener("toggle", (ev) => { // remember which brands are open across re-renders
   const d = ev.target;
+  if (d.classList?.contains("person-fold")) { if (d.open) openPeople.add(d.dataset.person); else openPeople.delete(d.dataset.person); return; }
   if (d.classList?.contains("brand-fold")) { if (d.open) openBrands.add(d.dataset.brand); else openBrands.delete(d.dataset.brand); }
 }, true);
 $app.addEventListener("keydown", (ev) => {
-  if (ev.target.id === "closet-search" && ev.key === "Enter") ev.target.blur(); // closes the phone keyboard
+  if ((ev.target.id === "closet-search" || ev.target.id === "family-search") && ev.key === "Enter") ev.target.blur(); // closes the phone keyboard
 });
 $app.addEventListener("click", (ev) => {
   const t = ev.target.closest("[data-tab],[data-act],[data-filter]");
@@ -1270,7 +1454,9 @@ $app.addEventListener("click", (ev) => {
     case "edit-item": return itemSheet({ dest: "wishlist", existing: S.data.items[id] });
     case "edit-print": return itemSheet({ dest: "closet", cat: "clothes", existing: S.data.prints[id] });
     case "edit-toy": return itemSheet({ dest: "closet", cat: hasCat(S.data.toys[id] || {}), existing: S.data.toys[id] });
-    case "add": return tab === "sizes" ? brandSheet() : itemSheet();
+    case "add": return tab === "family" ? familySheet() : tab === "sizes" ? brandSheet() : itemSheet();
+    case "edit-family": return familySheet(S.data.family?.[id]);
+    case "family-got": if (confirmTap(`fam-got:${id}`)) act(`fam-got:${id}`, () => store.deleteFamilyItem(id), "Removed from the list"); return;
     case "add-brand": return brandSheet();
     case "import-list": return importSheet();
     case "edit-colors": return colorsSheet();

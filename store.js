@@ -10,7 +10,7 @@
 //   • Retries are capped (2) with backoff, only for transient errors, and every
 //     change is idempotent on the server, so a retry can't double a write.
 //   • Identical in-flight requests are merged (double taps send one request).
-import { CONFIG } from "./config.js?v=1004-0834";
+import { CONFIG } from "./config.js?v=1004-0906";
 
 const SDK = "https://www.gstatic.com/firebasejs/11.0.2";
 const CACHE_KEY = `closet:${CONFIG.wishlistId}`;
@@ -215,6 +215,8 @@ export async function createFirebaseStore() {
     importBatch: (prints, toys) => mutate("importBatch", { prints, toys }),
     setColors: (colors) => mutate("setColors", { colors }),
     setPlan: (plan) => mutate("setPlan", { plan }),
+    upsertFamilyItem: (item) => mutate("upsertFamilyItem", { item }),
+    deleteFamilyItem: (id) => mutate("deleteFamilyItem", { id }),
     deletePlan: (id) => mutate("deletePlan", { id }),
     findPhotos: (ids) => mutate("findPhotos", { ids }),
     checkStock: (ids) => mutate("checkStock", { ids }),
@@ -263,6 +265,11 @@ export function createDemoStore() {
       t3: { id: "t3", name: "Bunny Lovey", brand: "Jellycat", type: "Plush", image: img("#F8E3E1", "#FFFFFF") },
     },
     favoriteStyles: ["Zippy", "Two-piece PJs"],
+    family: {
+      f1: { id: "f1", person: "Lys", category: "clothes", title: "Linen Button-Down Shirt", brand: "Madewell", sizes: ["S"], price: "$88", priority: "most", url: "https://example.com/products/linen-shirt", image: img("#EADFD3", "#FFFFFF") },
+      f2: { id: "f2", person: "Michael", category: "clothes", title: "Performance Quarter-Zip", brand: "Vuori", sizes: ["L", "Tall"], price: "$98", priority: "nice", image: img("#DDE3E8", "#FFFFFF") },
+      f3: { id: "f3", person: "Penny", category: "other", title: "Plush Squeaky Duck", brand: "BARK", price: "$14", priority: "nice", image: img("#F3E2B8", "#FFFFFF") },
+    },
     plans: [{ id: "plan_demo_xmas", name: "Christmas", date: "2026-12-25", note: "She'll be crawling everywhere by then!", rows: [
       { brand: "Little Sleepies", style: "Two-piece PJs", size: "12–18M", skip: false },
       { brand: "Little Sleepies", style: "Dress", size: "18–24M", skip: false },
@@ -347,6 +354,8 @@ export function createDemoStore() {
       }
     }),
     setColors: m((colors) => { data.colors = colors; }),
+    upsertFamilyItem: m((it) => { data.family = data.family || {}; data.family[it.id] = { ...it, createdAt: data.family[it.id]?.createdAt ?? Date.now() }; }),
+    deleteFamilyItem: m((id) => { delete data.family[id]; delete data.claims[id]; mine.delete(id); }),
     setPlan: m((plan) => { data.plans = [...(data.plans || []).filter((p) => p.id !== plan.id), plan]; }),
     deletePlan: m((id) => { data.plans = (data.plans || []).filter((p) => p.id !== id); }),
     async findPhotos(ids) {

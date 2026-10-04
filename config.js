@@ -25,7 +25,10 @@ export const CONFIG = {
   // Empty = App Check off (fine while testing).
   appCheckSiteKey: "",
 
-  // "Her colors" swatches on the Sizes page.
+  // "Shopping for the rest of the family?" page: one wishlist section per person.
+  family: ["Lys", "Michael", "Penny"],
+
+  // Starter "Her colors" swatches (edit them on the Sizes page once signed in).
   palette: [
     { name: "Dusty rose", hex: "#D4AEAA" },
     { name: "Blush", hex: "#EBD6D3" },

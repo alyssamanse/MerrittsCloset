@@ -4,7 +4,7 @@
 const crypto = require("crypto");
 
 const LIMITS = {
-  items: 150, prints: 400, brands: 40, toys: 200, // hard caps on stored records
+  items: 150, prints: 400, brands: 40, toys: 200, family: 150, // hard caps on stored records
   docBytes: 800_000,                     // Firestore's own limit is ~1 MiB
   activeClaimsPerKey: 15,                // one browser can't claim the whole list
   claimCooldownMs: 3_000,                // an item's claim can't flip faster than this
@@ -56,6 +56,7 @@ function onlyKeys(obj, allowed, what) {
 const BRAND_FIELDS = ["id", "name", "currentSize", "notes"];
 const ITEM_FIELDS = ["id", "category", "title", "brand", "printName", "type", "ageRange", "size", "price", "priority", "sizeFlexible", "printFlexible", "notes", "url", "image"];
 const TOY_FIELDS = ["id", "category", "name", "brand", "type", "url", "image"]; // "Toys she has" and "Other things she has"
+const FAMILY_FIELDS = ["id", "person", "category", "title", "brand", "sizes", "price", "priority", "notes", "url", "image"];
 const PRINT_FIELDS = ["id", "brand", "printName", "types", "favorite", "outgrown", "url", "image"];
 
 // Product types ("Zippy", "Dress"…) shown as pills on closet prints. Max 8 per print.
@@ -87,6 +88,23 @@ function cleanItem(i) {
     title: str(i.title, "Product name", 120, { required: true }), brand: str(i.brand, "Brand", 60),
     printName: str(i.printName, "Print", 80), type: str(i.type, "Product type", 24), size: str(i.size, "Size", 20), price: str(i.price, "Price", 20), priority,
     sizeFlexible: bool(i.sizeFlexible, "sizeFlexible"), printFlexible: bool(i.printFlexible, "printFlexible"),
+    notes: str(i.notes, "Note", 200), url: url(i.url, "Link"), image: url(i.image, "Image"),
+  };
+}
+// "Shopping for the rest of the family?" wishlist (Lys, Michael, Penny…).
+function cleanFamily(i) {
+  onlyKeys(i, FAMILY_FIELDS, "item");
+  const priority = i.priority ?? "nice";
+  if (!["most", "nice"].includes(priority)) bad("Priority must be most or nice");
+  const category = i.category ?? "other";
+  if (!["clothes", "other"].includes(category)) bad("Category must be clothes or other");
+  if (i.sizes !== undefined && (!Array.isArray(i.sizes) || i.sizes.length > 8)) bad("Up to 8 sizes");
+  const sizes = [];
+  for (const z of i.sizes || []) { const t = str(z, "Size", 20, { required: true }); if (!sizes.some((x) => x.toLowerCase() === t.toLowerCase())) sizes.push(t); }
+  return {
+    id: id(i.id), person: str(i.person, "Person", 30, { required: true }), category,
+    title: str(i.title, "Product name", 120, { required: true }), brand: str(i.brand, "Brand", 60),
+    sizes: category === "clothes" ? sizes : [], price: str(i.price, "Price", 20), priority,
     notes: str(i.notes, "Note", 200), url: url(i.url, "Link"), image: url(i.image, "Image"),
   };
 }
@@ -140,7 +158,7 @@ function ensureBrand(state, name) {
 // Every action changes at most one document. Repeating an action is a no-op
 // (changed: false → no write), which makes client retries safe.
 const GUEST_ACTIONS = new Set(["claim", "unclaim"]);
-const OWNER_ACTIONS = new Set(["init", "setVisibility", "upsertBrand", "deleteBrand", "upsertItem", "deleteItem", "receive", "upsertPrint", "deletePrint", "upsertToy", "deleteToy", "setFavoriteStyles", "addType", "renameType", "deleteType", "resetClaim", "importBatch", "setColors", "setImages", "setPlan", "deletePlan", "setStock"]);
+const OWNER_ACTIONS = new Set(["init", "setVisibility", "upsertBrand", "deleteBrand", "upsertItem", "deleteItem", "receive", "upsertPrint", "deletePrint", "upsertToy", "deleteToy", "setFavoriteStyles", "addType", "renameType", "deleteType", "resetClaim", "importBatch", "setColors", "setImages", "setPlan", "deletePlan", "setStock", "upsertFamilyItem", "deleteFamilyItem"]);
 
 function reduce(prev, action, payload, { isOwner, now }) {
   if (!GUEST_ACTIONS.has(action) && !OWNER_ACTIONS.has(action)) bad("Unknown action");
@@ -150,7 +168,7 @@ function reduce(prev, action, payload, { isOwner, now }) {
     return { state: emptyState(), changed: true };
   }
   const state = structuredClone(prev);
-  for (const k of ["brands", "items", "prints", "toys", "claims"]) state[k] = state[k] || {};
+  for (const k of ["brands", "items", "prints", "toys", "claims", "family"]) state[k] = state[k] || {};
   const p = payload || {};
   const same = { state: prev, changed: false };
 
@@ -171,7 +189,7 @@ function reduce(prev, action, payload, { isOwner, now }) {
       onlyKeys(p, ["itemId", "key"], "payload");
       const itemId = id(p.itemId, "itemId");
       if (typeof p.key !== "string" || !KEY_RE.test(p.key)) bad("Invalid claim key");
-      if (!state.items[itemId]) throw new ApiError(404, "That item isn't on the list anymore.");
+      if (!state.items[itemId] && !state.family[itemId]) throw new ApiError(404, "That item isn't on the list anymore.");
       const h = claimHash(p.key, itemId);
       const cur = state.claims[itemId];
       if (action === "claim") {
@@ -195,6 +213,24 @@ function reduce(prev, action, payload, { isOwner, now }) {
       const itemId = id(p.itemId, "itemId");
       if (!state.claims[itemId]?.h) return same;
       state.claims[itemId] = { h: null, at: now };
+      break;
+    }
+
+    case "upsertFamilyItem": {
+      onlyKeys(p, ["item"], "payload");
+      const it = cleanFamily(p.item);
+      const existing = state.family[it.id];
+      if (!existing && Object.keys(state.family).length >= LIMITS.family) bad(`The family list can hold up to ${LIMITS.family} items`);
+      const next = { ...it, createdAt: existing?.createdAt ?? now };
+      if (existing && JSON.stringify(existing) === JSON.stringify(next)) return same;
+      state.family[it.id] = next;
+      break;
+    }
+    case "deleteFamilyItem": {
+      onlyKeys(p, ["id"], "payload");
+      if (!state.family[id(p.id)]) return same;
+      delete state.family[p.id];
+      delete state.claims[p.id];
       break;
     }
 
@@ -326,7 +362,7 @@ function reduce(prev, action, payload, { isOwner, now }) {
       if ((raw.rows || []).length > MAX_PLAN_ROWS) bad(`Up to ${MAX_PLAN_ROWS} lines per occasion`);
       for (const r of raw.rows || []) {
         onlyKeys(r, ["brand", "style", "size", "skip"], "line");
-        const row = { brand: str(r.brand, "Brand", 60, { required: true }), style: str(r.style, "Style", 24), size: str(r.size, "Size", 20), skip: bool(r.skip, "skip") };
+        const row = { brand: str(r.brand, "Brand", 60), style: str(r.style, "Style", 24), size: str(r.size, "Size", 20), skip: bool(r.skip, "skip") };
         if (!row.style && !row.size) bad("Each line needs a style or a size");
         if (row.skip && !row.style) bad("Pick the style she won't need");
         plan.rows.push(row);
@@ -499,7 +535,7 @@ function reduce(prev, action, payload, { isOwner, now }) {
 }
 
 // What readers get back from the API. Matches what the Firestore document holds.
-const publicView = (s) => s && { v: s.v, visibility: s.visibility, brands: s.brands, items: s.items, prints: s.prints, toys: s.toys || {}, claims: s.claims, favoriteStyles: s.favoriteStyles || [], typeLists: s.typeLists || {}, ...(s.colors && { colors: s.colors }), plans: s.plans || [] };
+const publicView = (s) => s && { v: s.v, visibility: s.visibility, brands: s.brands, items: s.items, prints: s.prints, toys: s.toys || {}, claims: s.claims, favoriteStyles: s.favoriteStyles || [], typeLists: s.typeLists || {}, ...(s.colors && { colors: s.colors }), plans: s.plans || [], family: s.family || {} };
 
 // ── rate limiting (in memory) ───────────────────────────────────────
 // Token buckets. The function runs with max instances = 1, so one process

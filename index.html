@@ -407,10 +407,24 @@
   .print small { font: 500 11.5px/1.35 var(--sans); }
   .pill { font: 600 10.5px/1.5 var(--sans); }
   @media (prefers-reduced-motion: reduce) { .chev { transition: none; } }
+  /* Primary buttons: always light text on rose (some phones were drawing dark text). */
+  .btn:not(.ghost):not(.soft) { color: #FFF8F2; -webkit-text-fill-color: #FFF8F2; }
+  .btn.ghost { color: var(--ink); -webkit-text-fill-color: var(--ink); }
+  .btn.soft { color: var(--moss); -webkit-text-fill-color: var(--moss); }
+  .plan-row { grid-template-columns: 1fr 1fr; }
+  select.in { appearance: none; -webkit-appearance: none; padding-right: 34px; background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%238B7F7A' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 12px center; }
+  /* Family page */
+  .back-row { margin: -6px 0 4px; }
+  .back-row .link { padding-left: 0; }
+  .family-link { margin-bottom: 10px; }
+  .family-link .link { font-size: 15px; }
+  .fam-list { padding: 4px 0 14px; }
+  .title-link { color: inherit; text-decoration: none; }
+  .person-fold > summary h2 { font-size: 20px; }
 </style>
 </head>
 <body>
   <div id="app"></div>
-  <script type="module" src="app.js?v=1004-0834"></script>
+  <script type="module" src="app.js?v=1004-0906"></script>
 </body>
 </html>
