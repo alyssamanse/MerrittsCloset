@@ -211,6 +211,7 @@ export async function createFirebaseStore() {
     addType: (category, name) => mutate("addType", { category, name }),
     renameType: (category, from, to) => mutate("renameType", { category, from, to }),
     deleteType: (category, name) => mutate("deleteType", { category, name }),
+    importBatch: (prints, toys) => mutate("importBatch", { prints, toys }),
     upsertBrand: (brand) => mutate("upsertBrand", { brand }),
     deleteBrand: (id) => mutate("deleteBrand", { id }),
     async importLink(url) { return (await call("import", { url })).product; },
@@ -320,6 +321,19 @@ export function createDemoStore() {
       } else for (const t of Object.values(data.toys)) if ((t.category || "toy") === cat && eq(t.type)) t.type = to;
     }),
     deleteType: m((cat, name) => { data.typeLists[cat] = demoList(cat).filter((t) => t.toLowerCase() !== name.toLowerCase()); }),
+    importBatch: m((prints, toys) => {
+      const k = (...a) => a.map((x) => (x || "").toLowerCase()).join("|");
+      for (const p of prints) {
+        const match = Object.values(data.prints).find((x) => k(x.brand, x.printName) === k(p.brand, p.printName));
+        if (match) match.types = [...new Set([...(match.types || []), ...(p.types || [])])];
+        else { const id = "p_" + Math.random().toString(36).slice(2, 12); data.prints[id] = { id, ...p }; }
+        ensureBrand(p.brand);
+      }
+      for (const t of toys) {
+        if (Object.values(data.toys).some((x) => k(x.category || "toy", x.name, x.brand) === k(t.category, t.name, t.brand))) continue;
+        const id = "t_" + Math.random().toString(36).slice(2, 12); data.toys[id] = { id, ...t };
+      }
+    }),
     upsertBrand: m((b) => { data.brands[b.id] = b; }),
     deleteBrand: m((id) => { delete data.brands[id]; }),
     async importLink(url) {

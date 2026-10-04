@@ -89,6 +89,11 @@
   .print.editable { cursor: pointer; }
   .print img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: var(--blush); }
   .print span { display: block; padding: 7px 8px 9px; font-size: 13px; font-weight: 700; line-height: 1.25; }
+  .search { position: relative; margin: 0 0 12px; }
+  .search svg { position: absolute; left: 13px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); fill: none; stroke: var(--taupe); stroke-width: 2; stroke-linecap: round; pointer-events: none; }
+  .search .in { padding-left: 40px; border-radius: 999px; }
+  .search input::-webkit-search-cancel-button { filter: grayscale(1); opacity: .6; cursor: pointer; }
+  .result-count { margin: 0 0 4px; font-size: 13.5px; }
   .filters { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 14px; }
   .filter { border: 1.5px solid var(--line); background: var(--surface); color: var(--taupe); border-radius: 999px; padding: 6px 14px; font-weight: 800; font-size: 14px; cursor: pointer; }
   .filter span { font-weight: 700; opacity: .7; margin-left: 2px; }
@@ -155,6 +160,7 @@
   label.f { display: block; font-size: 13px; font-weight: 800; color: var(--taupe); margin: 12px 0 4px; }
   .in { width: 100%; border: 1.5px solid var(--line); background: var(--surface); border-radius: 12px; padding: 11px 12px; font-size: 16px; }
   .in:focus { outline: 2px solid var(--blush-2); border-color: var(--rose); }
+  textarea.in { resize: vertical; min-height: 120px; font-size: 14px; }
   .row { display: flex; gap: 10px; } .row > * { flex: 1; min-width: 0; }
   .check { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-weight: 700; font-size: 15px; }
   .check input { width: 20px; height: 20px; accent-color: var(--rose); }

@@ -36,6 +36,12 @@ const hasCat = (t) => (t.category === "other" ? "other" : "toy");               
 const isToy = (i) => catOf(i) !== "clothes"; // toys and other things share the no-size layout
 const CAT_FILTER = { clothes: "clothes", toy: "toys", other: "other" };
 const filter = { wishlist: "all", closet: "clothes" }; // view-only, no requests
+let closetQuery = ""; // closet search; filters what's already loaded, never makes a request
+const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[’']/g, "");
+const matches = (q, ...fields) => {
+  const hay = fold(fields.flat().join(" "));
+  return fold(q).split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
+};
 const isClaimed = (id) => !!S.data?.claims?.[id]?.h;
 const PLACEHOLDER =
   "data:image/svg+xml;utf8," +
@@ -94,6 +100,12 @@ const armedLabel = (key, normal, confirm) => (armed.has(key) ? confirm : normal)
 // ── render ───────────────────────────────────────────────────────────
 function render() {
   if (document.querySelector(".sheet-bg")) return; // don't wipe a form being filled in
+  const searching = document.activeElement?.id === "closet-search";
+  const caret = searching ? document.activeElement.selectionStart : null;
+  queueMicrotask(() => {
+    const box = searching && document.getElementById("closet-search");
+    if (box) { box.focus(); try { box.setSelectionRange(caret, caret); } catch {} }
+  });
   const name = esc(CONFIG.babyName);
   $app.innerHTML = `
     ${isDemo ? `<div class="demo-bar">Preview with sample data. Nothing here is saved.</div>` : ""}
@@ -212,38 +224,63 @@ function itemCard(i) {
 }
 
 function closetView() {
+  return `
+    <div class="section-title"><h2>What she has</h2>${owner() ? `<button class="link" data-act="import-list">Import list</button>` : ""}</div>
+    <div class="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+      <input type="search" id="closet-search" class="in" value="${esc(closetQuery)}" placeholder="Search her closet, like “mermaids”" aria-label="Search her closet by print, brand or style" autocomplete="off" enterkeyhint="search" />
+    </div>
+    <div id="closet-results">${closetResults()}</div>`;
+}
+
+function closetResults() {
   const prints = list(S.data.prints);
   const things = list(S.data.toys);
   const toys = things.filter((t) => hasCat(t) === "toy");
   const others = things.filter((t) => hasCat(t) === "other");
-  return `
-    <div class="section-title"><h2>What she has</h2></div>
+  const q = closetQuery.trim();
+  if (!q) {
+    return `
     ${filterChips("closet", [["clothes", "Clothes", prints.length], ["toys", "Toys", toys.length], ["other", "Other", others.length]])}
     ${filter.closet === "toys" ? thingsView(toys, "toy") : filter.closet === "other" ? thingsView(others, "other") : clothesView(prints)}`;
+  }
+  // Searching looks across clothes, toys and other things at once.
+  const mp = prints.filter((p) => matches(q, p.printName, p.brand, p.types || []));
+  const mt = toys.filter((t) => matches(q, t.name, t.brand, t.type));
+  const mo = others.filter((t) => matches(q, t.name, t.brand, t.type));
+  const n = mp.length + mt.length + mo.length;
+  if (!n) return `<div class="empty">Nothing in her closet matches “${esc(q)}”.<br><span class="muted">If it's a print, she doesn't have it yet.</span></div>`;
+  const thingGrid = (arr) => `<div class="grid toys">${arr.sort((a, b) => a.name.localeCompare(b.name)).map((t) => tile(t, "edit-toy", t.name, [t.type].filter(Boolean), t.brand)).join("")}</div>`;
+  return `
+    <p class="muted result-count">${n} ${n === 1 ? "match" : "matches"} for “${esc(q)}”</p>
+    ${mp.length ? printGroups(mp) : ""}
+    ${mt.length ? `<div class="brand-head"><h2>Toys</h2></div>${thingGrid(mt)}` : ""}
+    ${mo.length ? `<div class="brand-head"><h2>Other things</h2></div>${thingGrid(mo)}` : ""}`;
 }
 
-function clothesView(prints) {
+function printGroups(prints) {
   const groups = new Map();
   for (const p of prints) {
     const key = (p.brand || "Other").trim();
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(p);
   }
-  const names = [...groups.keys()].sort((a, b) => a.localeCompare(b));
+  return [...groups.keys()].sort((a, b) => a.localeCompare(b)).map((n) => {
+    const b = brandByName(n);
+    const ps = groups.get(n).sort((a, b) => (a.printName || "").localeCompare(b.printName || ""));
+    return `
+      <div class="brand-head"><h2>${esc(n)}</h2>${b?.currentSize ? `<span class="chip">Wears ${esc(b.currentSize)}</span>` : ""}</div>
+      <div class="grid">
+        ${ps.map((p) => tile(p, "edit-print", (p.favorite ? "★ " : "") + (p.printName || "Untitled print"), p.types || [])).join("")}
+      </div>`;
+  }).join("");
+}
+
+function clothesView(prints) {
   return `
     <div class="note">Prints ${esc(CONFIG.babyName)} already has, and the styles she has them in. A print she has as a zippy can still be a lovely dress!</div>
     ${favoritesView(prints)}
-    ${names.length
-      ? names.map((n) => {
-          const b = brandByName(n);
-          const ps = groups.get(n).sort((a, b) => (a.printName || "").localeCompare(b.printName || ""));
-          return `
-          <div class="brand-head"><h2>${esc(n)}</h2>${b?.currentSize ? `<span class="chip">Wears ${esc(b.currentSize)}</span>` : ""}</div>
-          <div class="grid">
-            ${ps.map((p) => tile(p, "edit-print", (p.favorite ? "★ " : "") + (p.printName || "Untitled print"), p.types || [])).join("")}
-          </div>`;
-        }).join("")
-      : `<div class="empty">No clothes listed yet.</div>`}`;
+    ${prints.length ? printGroups(prints) : `<div class="empty">No clothes listed yet.</div>`}`;
 }
 
 function favoritesView(prints) {
@@ -737,7 +774,71 @@ function brandSheet(existing = null) {
   );
 }
 
+// Bulk import of a reviewed list (from Claude's order-email review page).
+// Sends small batches one after another; the server merges by brand + print, so re-importing is safe.
+const IMPORT_CHUNK = 30;
+function parseImport(text) {
+  let d;
+  try { d = JSON.parse(text); } catch { throw new Error("That doesn't look like an import list. Copy it again from the review page."); }
+  if (!d || d.kind !== "merritts-closet-import" || !Array.isArray(d.prints) || !Array.isArray(d.toys)) throw new Error("That doesn't look like an import list. Copy it again from the review page.");
+  if (d.prints.length + d.toys.length > 600) throw new Error("That list is too long to import at once.");
+  return { prints: d.prints, toys: d.toys };
+}
+function importSheet() {
+  openSheet(
+    `<h2>Import list</h2>
+     <p class="muted">On the review page Claude made, tap <b>Copy for closet</b>, then paste here. Prints she already has get the new styles added. Nothing is duplicated.</p>
+     <textarea class="in" id="imp-text" rows="6" placeholder="Paste here" aria-label="Import list"></textarea>
+     <p class="muted" id="imp-sum" aria-live="polite"></p>
+     <div class="err sheet-err" hidden></div>
+     <div class="sheet-actions"><span class="spacer"></span>
+       <button class="btn ghost" data-act="cancel">Cancel</button>
+       <button class="btn" data-act="go" disabled>Import</button></div>`,
+    (el) => {
+      const ta = el.querySelector("#imp-text"), sum = el.querySelector("#imp-sum"), go = el.querySelector('[data-act="go"]'), err = el.querySelector(".sheet-err");
+      let parsed = null;
+      const check = () => {
+        err.hidden = true; parsed = null; go.disabled = true; sum.textContent = "";
+        if (!ta.value.trim()) return;
+        try {
+          parsed = parseImport(ta.value.trim());
+          sum.textContent = `${parsed.prints.length} prints and ${parsed.toys.length} toys or other things.`;
+          go.disabled = !(parsed.prints.length + parsed.toys.length);
+        } catch (e) { err.textContent = e.message; err.hidden = false; }
+      };
+      ta.addEventListener("input", check);
+      el.querySelector('[data-act="cancel"]').addEventListener("click", () => closeSheet());
+      go.addEventListener("click", async () => {
+        if (!parsed || go.disabled) return;
+        go.disabled = true; ta.disabled = true;
+        const recs = [...parsed.prints.map((p) => ["p", p]), ...parsed.toys.map((t) => ["t", t])];
+        try {
+          for (let i = 0; i < recs.length; i += IMPORT_CHUNK) {
+            const part = recs.slice(i, i + IMPORT_CHUNK);
+            sum.textContent = `Importing ${Math.min(i + IMPORT_CHUNK, recs.length)} of ${recs.length}…`;
+            await store.importBatch(part.filter(([k]) => k === "p").map(([, v]) => v), part.filter(([k]) => k === "t").map(([, v]) => v));
+          }
+          closeSheet();
+          toast(`Imported ${recs.length}`);
+        } catch (e) {
+          err.textContent = `${e.message || "Import stopped."} Anything before this point was saved. You can paste and import again safely.`;
+          err.hidden = false; ta.disabled = false; go.disabled = false;
+        }
+      });
+    }
+  );
+}
+
 // ── events (one delegated listener, attached once) ───────────────────
+$app.addEventListener("input", (ev) => {
+  if (ev.target.id !== "closet-search") return;
+  closetQuery = ev.target.value.slice(0, 60);
+  const out = document.getElementById("closet-results");
+  if (out) out.innerHTML = closetResults();
+});
+$app.addEventListener("keydown", (ev) => {
+  if (ev.target.id === "closet-search" && ev.key === "Enter") ev.target.blur(); // closes the phone keyboard
+});
 $app.addEventListener("click", (ev) => {
   const t = ev.target.closest("[data-tab],[data-act],[data-filter]");
   if (!t || t.disabled) return;
@@ -766,6 +867,7 @@ $app.addEventListener("click", (ev) => {
     case "edit-toy": return itemSheet({ dest: "closet", cat: hasCat(S.data.toys[id] || {}), existing: S.data.toys[id] });
     case "add": return tab === "sizes" ? brandSheet() : itemSheet();
     case "add-brand": return brandSheet();
+    case "import-list": return importSheet();
     case "edit-favstyles": return favStylesSheet();
     case "edit-brand": return brandSheet(S.data.brands[id]);
     case "refresh": return act("refresh", async () => { if (!(await store.refresh())) toast("Already up to date"); });
