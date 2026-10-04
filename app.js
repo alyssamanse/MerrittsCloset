@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1004-1136";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-1136";
-const BUILD = "1004-1136"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1004-1144";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-1144";
+const BUILD = "1004-1144"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = ["wishlist", "closet", "sizes"];
@@ -124,6 +124,14 @@ function confirmTap(key) {
 const armedLabel = (key, normal, confirm) => (armed.has(key) ? confirm : normal);
 
 // ── render ───────────────────────────────────────────────────────────
+// If a page fails to draw, say so on screen (with the reason) instead of silently doing nothing.
+function safeBody() {
+  try { return body(); }
+  catch (e) {
+    console.error(e);
+    return `<div class="empty">This page didn't load. Tap <b>Get Latest Version</b> at the bottom, then try again.<br><span class="muted" style="font-size:12px">${esc(String(e?.message || e))}</span></div>`;
+  }
+}
 function render() {
   if (document.querySelector(".sheet-bg")) return; // don't wipe a form being filled in
   const searchId = ["closet-search", "family-search"].find((x) => document.activeElement?.id === x);
@@ -144,7 +152,7 @@ function render() {
     <nav class="tabs" role="tablist">
       ${MAIN_TABS.map((t) => `<button class="tab" role="tab" aria-selected="${tab === t}" data-tab="${t}">${TAB_LABEL[t]}</button>`).join("")}
     </nav>
-    <main>${adminPanel()}${body()}</main>
+    <main>${adminPanel()}${safeBody()}</main>
     ${owner() && S.status === "ok" && !(selectMode && tab === "closet") ? `<button class="btn fab" data-act="add">+ Add</button>` : ""}
     ${owner() && selectMode && tab === "closet" ? bulkBar() : ""}
     <footer>
@@ -1568,9 +1576,30 @@ window.addEventListener("hashchange", () => {
   if (TABS.includes(h) && h !== tab) { tab = h; render(); }
 });
 
+// ── stay current ─────────────────────────────────────────────────────
+// Home-screen apps can keep an old copy of the page. On open (and when brought back
+// to the front) compare with the live version number; if newer, reload once.
+// One small request to GitHub Pages; nothing touches Firebase.
+async function checkForNewVersion() {
+  if (isDemo || !/^\d{4}-\d{4}$/.test(BUILD)) return;
+  try {
+    const html = await (await fetch(location.pathname + "?check=" + Date.now(), { cache: "no-store" })).text();
+    const live = (html.match(/app\.js\?v=([\w-]+)/) || [])[1];
+    if (!live || live === BUILD) return;
+    const key = "closet:reloadedFor";
+    if (sessionStorage.getItem(key) === live) return; // tried already this session; don't loop
+    sessionStorage.setItem(key, live);
+    const q = new URLSearchParams(location.search);
+    q.set("fresh", live);
+    location.replace(`${location.pathname}?${q.toString().replace(/=(&|$)/g, "$1")}${location.hash}`);
+  } catch {}
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForNewVersion(); });
+
 // ── boot ─────────────────────────────────────────────────────────────
 document.title = `${CONFIG.babyName}'s Closet`;
 render();
+checkForNewVersion();
 (async () => {
   try {
     store = isDemo ? createDemoStore() : await createFirebaseStore();
