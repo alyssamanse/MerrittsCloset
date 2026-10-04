@@ -131,6 +131,7 @@ const DEFAULT_TYPES = {
 const MAX_TYPES_PER_LIST = 40;
 const IMPORT_MAX = 40;
 const MAX_COLORS = 24;
+const MAX_BULK = 200;
 const MAX_PLANS = 8, MAX_PLAN_ROWS = 80, MAX_BATCH_IMAGES = 40, MAX_STOCK_RESULTS = 20;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/; // records per importBatch call (keeps each request well under the 16 KB body cap)
 const typeList = (state, cat) => [...(state.typeLists?.[cat] || DEFAULT_TYPES[cat])];
@@ -167,7 +168,7 @@ function ensureBrand(state, name) {
 // Every action changes at most one document. Repeating an action is a no-op
 // (changed: false → no write), which makes client retries safe.
 const GUEST_ACTIONS = new Set(["claim", "unclaim"]);
-const OWNER_ACTIONS = new Set(["init", "setVisibility", "upsertBrand", "deleteBrand", "upsertItem", "deleteItem", "receive", "upsertPrint", "deletePrint", "upsertToy", "deleteToy", "setFavoriteStyles", "addType", "renameType", "deleteType", "resetClaim", "importBatch", "setColors", "setImages", "setPlan", "deletePlan", "setStock", "upsertFamilyItem", "deleteFamilyItem"]);
+const OWNER_ACTIONS = new Set(["init", "setVisibility", "upsertBrand", "deleteBrand", "upsertItem", "deleteItem", "receive", "upsertPrint", "deletePrint", "upsertToy", "deleteToy", "setFavoriteStyles", "addType", "renameType", "deleteType", "resetClaim", "importBatch", "setColors", "setImages", "setPlan", "deletePlan", "setStock", "upsertFamilyItem", "deleteFamilyItem", "bulkCloset"]);
 
 function reduce(prev, action, payload, { isOwner, now }) {
   if (!GUEST_ACTIONS.has(action) && !OWNER_ACTIONS.has(action)) bad("Unknown action");
@@ -222,6 +223,28 @@ function reduce(prev, action, payload, { isOwner, now }) {
       const itemId = id(p.itemId, "itemId");
       if (!state.claims[itemId]?.h) return same;
       state.claims[itemId] = { h: null, at: now };
+      break;
+    }
+
+    case "bulkCloset": {
+      // Owner's multi-select in the closet: one change applied to many records, one write.
+      onlyKeys(p, ["kind", "ids", "op"], "payload");
+      if (!["prints", "toys"].includes(p.kind)) bad("kind must be prints or toys");
+      const ops = p.kind === "prints" ? ["delete", "favorite", "unfavorite", "outgrown", "fits"] : ["delete"];
+      if (!ops.includes(p.op)) bad("Unknown bulk change");
+      if (!Array.isArray(p.ids) || !p.ids.length || p.ids.length > MAX_BULK) bad(`Select 1 to ${MAX_BULK} at a time`);
+      const before = JSON.stringify(state[p.kind]);
+      for (const raw of p.ids) {
+        const rid = id(raw);
+        const rec = state[p.kind][rid];
+        if (!rec) continue;
+        if (p.op === "delete") delete state[p.kind][rid];
+        else if (p.op === "favorite") rec.favorite = true;
+        else if (p.op === "unfavorite") rec.favorite = false;
+        else if (p.op === "outgrown") rec.outgrown = true;
+        else if (p.op === "fits") rec.outgrown = false;
+      }
+      if (JSON.stringify(state[p.kind]) === before) return same;
       break;
     }
 

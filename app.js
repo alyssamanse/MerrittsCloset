@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1004-1047";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-1047";
-const BUILD = "1004-1047"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1004-1054";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-1054";
+const BUILD = "1004-1054"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = ["wishlist", "closet", "sizes"];
@@ -145,7 +145,8 @@ function render() {
       ${MAIN_TABS.map((t) => `<button class="tab" role="tab" aria-selected="${tab === t}" data-tab="${t}">${TAB_LABEL[t]}</button>`).join("")}
     </nav>
     <main>${adminPanel()}${body()}</main>
-    ${owner() && S.status === "ok" ? `<button class="btn fab" data-act="add">+ Add</button>` : ""}
+    ${owner() && S.status === "ok" && !(selectMode && tab === "closet") ? `<button class="btn fab" data-act="add">+ Add</button>` : ""}
+    ${owner() && selectMode && tab === "closet" ? bulkBar() : ""}
     <footer>
       <button class="to-top" data-act="to-top" aria-label="Back to top"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg><span>Back to Top</span></button>
       ${tab !== "family" && (CONFIG.family || []).length ? `<div class="family-link"><button class="link" data-act="go-tab" data-to="family">Shopping for the rest of the family?</button></div>` : ""}
@@ -273,7 +274,7 @@ function itemCard(i) {
 
 function closetView() {
   return `
-    <div class="section-title"><h2>What She Has</h2>${owner() ? `<span class="title-links">${photoButton()}<button class="link" data-act="import-list">Import List</button></span>` : ""}</div>
+    <div class="section-title"><h2>What She Has</h2>${owner() ? `<span class="title-links">${selectMode ? "" : photoButton()}${selectMode ? "" : `<button class="link" data-act="import-list">Import List</button>`}<button class="link" data-act="select-mode">${selectMode ? "Done" : "Select"}</button></span>` : ""}</div>
     <div class="search">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
       <input type="search" id="closet-search" class="in" value="${esc(closetQuery)}" placeholder="Search her closet, like “mermaids”" aria-label="Search her closet by print, brand or style" autocomplete="off" enterkeyhint="search" />
@@ -281,8 +282,11 @@ function closetView() {
     <div id="closet-results">${closetResults()}</div>`;
 }
 
+// Outgrown prints from brands that aren't her favorites aren't shown to guests (no one needs
+// to rebuy those). The owner still sees them, marked "Hidden", so they can be managed.
+const hiddenFromGuests = (p) => !!p.outgrown && !brandByName(p.brand);
 function closetResults() {
-  const prints = list(S.data.prints);
+  const prints = list(S.data.prints).filter((p) => owner() || !hiddenFromGuests(p));
   const things = list(S.data.toys);
   const toys = things.filter((t) => hasCat(t) === "toy");
   const others = things.filter((t) => hasCat(t) === "other");
@@ -309,6 +313,8 @@ function closetResults() {
 // Brands open/closed in the closet. Collapsed by default so a long closet is easy to scan;
 // searching or filtering opens everything that matches.
 const openBrands = new Set();
+let selectMode = false;            // owner's multi-select in the closet
+const picked = new Set();          // selected print / toy ids
 let favsOpen = true; // "Her Favorites" starts open; remembered while the page is open
 function printGroups(prints, { forceOpen = false } = {}) {
   // Group by brand key so spelling variants share one section. The section is named after
@@ -336,6 +342,7 @@ function printGroups(prints, { forceOpen = false } = {}) {
     return `
       <details class="brand-fold" data-brand="${esc(n)}" ${allOpen || openBrands.has(n) ? "open" : ""}>
         <summary class="brand-head"><h2>${b ? `<span class="fav-mark" aria-label="Favorite brand">★</span> ` : ""}${esc(n)}</h2><span class="brand-meta">${ps.length} ${ps.length === 1 ? "Print" : "Prints"}${b?.currentSize ? ` · Wears ${esc(b.currentSize)}` : ""}</span><span class="chev" aria-hidden="true"></span></summary>
+        ${selectMode ? `<div class="pick-all"><button class="link" data-act="pick-all" data-ids="${ps.map((p) => p.id).join(",")}">${ps.every((p) => picked.has(p.id)) ? "Clear" : "Select All"} ${esc(n)}</button></div>` : ""}
         <div class="grid">
           ${ps.map((p) => tile(p, "edit-print", (p.favorite ? "★ " : "") + (p.printName || "Untitled print"), p.types || [])).join("")}
         </div>
@@ -423,7 +430,7 @@ function thingsView(things, cat) {
 
 function tile(rec, editAct, title, pills, sub = "") {
   const og = !!rec.outgrown;
-  const allPills = [...(og ? [`<i class="pill og">Outgrown</i>`] : []), ...pills.map((t) => `<i class="pill">${esc(t)}</i>`)];
+  const allPills = [...(og ? [`<i class="pill og">Outgrown</i>`] : []), ...(og && owner() && editAct === "edit-print" && hiddenFromGuests(rec) ? [`<i class="pill hid" title="Outgrown and not a favorite brand, so guests don't see it">Hidden</i>`] : []), ...pills.map((t) => `<i class="pill">${esc(t)}</i>`)];
   const caption = `<span>${esc(title)}${sub ? `<small>${esc(sub)}</small>` : ""}${allPills.length ? `<b class="pills">${allPills.join("")}</b>` : ""}</span>`;
   const cls = `print${og ? " outgrown" : ""}`;
   const label = og ? ` aria-label="${esc(title)}, outgrown"` : "";
@@ -431,6 +438,10 @@ function tile(rec, editAct, title, pills, sub = "") {
   // a tile with no photo yet opens Edit from anywhere so a photo can be added.
   const hasPhoto = !!safeUrl(rec.image);
   const zoom = `<button class="tile-img" data-act="zoom" data-kind="${editAct}" data-id="${rec.id}" aria-label="Enlarge photo of ${esc(title)}">${img(rec.image, "", title)}</button>`;
+  if (owner() && selectMode) {
+    const on = picked.has(rec.id);
+    return `<button class="${cls} selectable${on ? " picked" : ""}" data-act="pick" data-id="${rec.id}" aria-pressed="${on}"${label}>${img(rec.image, "", title)}${caption}<i class="tick" aria-hidden="true"></i></button>`;
+  }
   if (owner()) {
     return hasPhoto
       ? `<div class="${cls} editable"${label}>${zoom}<button class="tile-cap" data-act="${editAct}" data-id="${rec.id}" aria-label="Edit ${esc(title)}">${caption}</button></div>`
@@ -706,6 +717,38 @@ function planSheet(existing) {
       });
     }
   );
+}
+
+// ── bulk edit (owner) ───────────────────────────────────────────────
+const bulkKind = () => (filter.closet === "clothes" ? "prints" : "toys");
+function bulkBar() {
+  const kind = bulkKind();
+  const pool = kind === "prints" ? S.data.prints || {} : S.data.toys || {};
+  const n = [...picked].filter((x) => pool[x]).length;
+  const d = (op) => (!n || busy.has("bulk") ? "disabled" : "") + ` data-op="${op}"`;
+  return `<div class="bulk-bar" role="toolbar" aria-label="Selected items">
+    <span class="bulk-count">${n} selected</span>
+    ${kind === "prints" ? `<button class="btn small soft" data-act="bulk" ${d("favorite")}>★ Favorite</button>
+    <button class="btn small ghost" data-act="bulk" ${d("unfavorite")}>Unfavorite</button>
+    <button class="btn small ghost" data-act="bulk" ${d("outgrown")}>Outgrown</button>` : ""}
+    <button class="btn small danger-btn" data-act="bulk" ${d("delete")}>Delete</button>
+  </div>`;
+}
+async function runBulk(op) {
+  const kind = bulkKind();
+  const pool = kind === "prints" ? S.data.prints || {} : S.data.toys || {};
+  const ids = [...picked].filter((x) => pool[x]);
+  if (!ids.length) return;
+  if (op === "delete") {
+    const what = kind === "prints" ? (ids.length === 1 ? "print" : "prints") : (ids.length === 1 ? "item" : "items");
+    const ok = await confirmModal({ title: `Delete ${ids.length} ${what}?`, message: "They'll be removed from her closet for everyone. This can't be undone.", confirmLabel: "Delete" });
+    if (!ok) return;
+  }
+  const done = { delete: "Deleted", favorite: "Marked as favorites", unfavorite: "Removed from favorites", outgrown: "Marked outgrown" }[op];
+  const okRun = await act("bulk", async () => {
+    for (let i = 0; i < ids.length; i += 200) await store.bulkCloset(kind, ids.slice(i, i + 200), op);
+  }, `${done}: ${ids.length}`);
+  if (okRun) { picked.clear(); if (op === "delete") selectMode = false; render(); }
 }
 
 // ── enlarge a closet photo ───────────────────────────────────────────
@@ -1295,6 +1338,15 @@ $app.addEventListener("click", (ev) => {
       if (t.dataset.focus) document.getElementById(t.dataset.focus)?.focus(); return;
     case "share": return shareSheet();
     case "zoom": return openLightbox(t.dataset.kind, id);
+    case "select-mode": selectMode = !selectMode; picked.clear(); return render();
+    case "pick": if (picked.has(id)) picked.delete(id); else picked.add(id); return render();
+    case "pick-all": {
+      const ids = t.dataset.ids.split(",").filter(Boolean);
+      const all = ids.every((x) => picked.has(x));
+      for (const x of ids) { if (all) picked.delete(x); else picked.add(x); }
+      return render();
+    }
+    case "bulk": return runBulk(t.dataset.op);
     case "to-top": window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); return;
     case "fold-all":
       for (const d of document.querySelectorAll(".brand-fold")) { d.open = t.dataset.open === "1"; if (d.open) openBrands.add(d.dataset.brand); else openBrands.delete(d.dataset.brand); }

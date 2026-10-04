@@ -10,7 +10,7 @@
 //   • Retries are capped (2) with backoff, only for transient errors, and every
 //     change is idempotent on the server, so a retry can't double a write.
 //   • Identical in-flight requests are merged (double taps send one request).
-import { CONFIG } from "./config.js?v=1004-1047";
+import { CONFIG } from "./config.js?v=1004-1054";
 
 const SDK = "https://www.gstatic.com/firebasejs/11.0.2";
 const CACHE_KEY = `closet:${CONFIG.wishlistId}`;
@@ -216,6 +216,7 @@ export async function createFirebaseStore() {
     setColors: (colors) => mutate("setColors", { colors }),
     setPlan: (plan) => mutate("setPlan", { plan }),
     upsertFamilyItem: (item) => mutate("upsertFamilyItem", { item }),
+    bulkCloset: (kind, ids, op) => mutate("bulkCloset", { kind, ids, op }),
     deleteFamilyItem: (id) => mutate("deleteFamilyItem", { id }),
     deletePlan: (id) => mutate("deletePlan", { id }),
     findPhotos: (ids) => mutate("findPhotos", { ids }),
@@ -353,6 +354,14 @@ export function createDemoStore() {
       }
     }),
     setColors: m((colors) => { data.colors = colors; }),
+    bulkCloset: m((kind, ids, op) => {
+      for (const x of ids) {
+        const r = data[kind][x]; if (!r) continue;
+        if (op === "delete") delete data[kind][x];
+        else if (op === "favorite") r.favorite = true; else if (op === "unfavorite") r.favorite = false;
+        else if (op === "outgrown") r.outgrown = true; else if (op === "fits") r.outgrown = false;
+      }
+    }),
     upsertFamilyItem: m((it) => { data.family = data.family || {}; data.family[it.id] = { ...it, createdAt: data.family[it.id]?.createdAt ?? Date.now() }; }),
     deleteFamilyItem: m((id) => { delete data.family[id]; delete data.claims[id]; mine.delete(id); }),
     setPlan: m((plan) => { data.plans = [...(data.plans || []).filter((p) => p.id !== plan.id), plan]; }),

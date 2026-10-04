@@ -444,10 +444,23 @@
   details.favs:not([open]) { padding-bottom: 14px; }
   details.favs[open] > summary .chev { transform: rotate(-135deg); margin-top: 4px; }
   .favs-edit { display: flex; justify-content: flex-end; margin: 2px 0 -4px; }
+  /* Closet multi-select (owner) */
+  .print.selectable { position: relative; cursor: pointer; text-align: left; padding: 0; font: inherit; color: inherit; }
+  .print.selectable .tick { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; background: rgba(58,46,48,.25); box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+  .print.selectable.picked { outline: 2px solid var(--rose); outline-offset: -2px; }
+  .print.selectable.picked .tick { background: var(--rose) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 12.5l4 4 8-9' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat; }
+  .pick-all { display: flex; justify-content: flex-end; margin: -6px 0 6px; }
+  .bulk-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 7; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; width: min(calc(100vw - 24px), 560px); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px; box-shadow: 0 8px 24px rgba(58,46,48,.18); }
+  .bulk-count { font-weight: 700; font-size: 14px; margin-right: auto; padding-left: 4px; }
+  .bulk-bar .btn:disabled { opacity: .45; }
+  .btn.danger-btn { background: #A8423A; }
+  main:has(~ .bulk-bar) { padding-bottom: 160px; }
+  .pill.hid { background: transparent; border: 1px dashed var(--taupe); color: var(--taupe); }
+  body:has(.bulk-bar) .toast { bottom: calc(150px + env(safe-area-inset-bottom)); }
 </style>
 </head>
 <body>
   <div id="app"></div>
-  <script type="module" src="app.js?v=1004-1047"></script>
+  <script type="module" src="app.js?v=1004-1054"></script>
 </body>
 </html>

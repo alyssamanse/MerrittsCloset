@@ -457,3 +457,19 @@ test("brand spellings: imports merge across variants and don't fill Favorite Bra
   s = logic.reduce(s, "upsertItem", { item: { id: "item_los_0001", title: "Set", brand: "Little One Co" } }, own).state;
   assert.equal(Object.keys(s.brands).length, 1, "a variant spelling doesn't add a second brand");
 });
+
+test("bulkCloset: owner-only, validated, one write for many prints", async () => {
+  const o = { token: "owner" };
+  for (const n of ["bulk_print_01", "bulk_print_02", "bulk_print_03"]) await call("upsertPrint", { print: { id: n, brand: "B", printName: n } }, o);
+  assert.equal((await call("bulkCloset", { kind: "prints", ids: ["bulk_print_01"], op: "delete" })).status, 403);
+  assert.equal((await call("bulkCloset", { kind: "prints", ids: ["bulk_print_01"], op: "explode" }, o)).status, 400);
+  assert.equal((await call("bulkCloset", { kind: "toys", ids: ["bulk_print_01"], op: "favorite" }, o)).status, 400);
+  assert.equal((await call("bulkCloset", { kind: "prints", ids: [], op: "favorite" }, o)).status, 400);
+  assert.equal((await call("bulkCloset", { kind: "prints", ids: ["../x"], op: "favorite" }, o)).status, 400);
+  const w = store.writes;
+  const f = await call("bulkCloset", { kind: "prints", ids: ["bulk_print_01", "bulk_print_02"], op: "favorite" }, o);
+  assert.equal(store.writes, w + 1);
+  assert.ok(f.body.data.prints.bulk_print_01.favorite && f.body.data.prints.bulk_print_02.favorite && !f.body.data.prints.bulk_print_03.favorite);
+  const d = await call("bulkCloset", { kind: "prints", ids: ["bulk_print_02", "bulk_print_03", "not_there_99"], op: "delete" }, o);
+  assert.ok(!d.body.data.prints.bulk_print_02 && !d.body.data.prints.bulk_print_03 && d.body.data.prints.bulk_print_01);
+});
