@@ -245,7 +245,7 @@ export function createDemoStore() {
     },
     prints: {
       p1: { id: "p1", brand: "Kyte Baby", printName: "Cloud", types: ["Zippy", "Swaddle"], image: img("#F1ECE6", "#B9A99B") },
-      p2: { id: "p2", brand: "Kyte Baby", printName: "Blush", types: ["Footie"], image: img("#F4D6D3", "#E8B7B3") },
+      p2: { id: "p2", brand: "Kyte Baby", printName: "Blush", types: ["Footie"], outgrown: true, image: img("#F4D6D3", "#E8B7B3") },
       p3: { id: "p3", brand: "Little Sleepies", printName: "Bunny Meadow", types: ["Zippy"], favorite: true, image: img("#E3E6D3", "#FFFFFF") },
       p4: { id: "p4", brand: "Posh Peanut", printName: "Honey Bears", types: ["Romper", "Bow"], image: img("#EADFD3", "#B9A58C") },
       p5: { id: "p5", brand: "Posh Peanut", printName: "Pink Stripe", types: ["Dress"], image: img("#F8E3E1", "#D99A97") },
@@ -299,7 +299,7 @@ export function createDemoStore() {
       }
       const pn = it.printName || it.title;
       const match = Object.values(data.prints).find((x) => (x.brand || "").toLowerCase() === (it.brand || "").toLowerCase() && (x.printName || "").toLowerCase() === pn.toLowerCase());
-      if (match) { if (it.type && !(match.types || []).includes(it.type)) match.types = [...(match.types || []), it.type]; }
+      if (match) { if (it.type && !(match.types || []).includes(it.type)) match.types = [...(match.types || []), it.type]; match.outgrown = false; }
       else data.prints[`r_${id}`] = { id: `r_${id}`, brand: it.brand, printName: pn, types: it.type ? [it.type] : [], image: it.image, url: it.url };
       delete data.items[id]; delete data.claims[id]; mine.delete(id); ensureBrand(it.brand);
     }),

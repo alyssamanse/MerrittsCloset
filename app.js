@@ -35,7 +35,7 @@ const catOf = (i) => (i.category === "toy" || i.category === "other" ? i.categor
 const hasCat = (t) => (t.category === "other" ? "other" : "toy");                             // "what she has" non-clothes
 const isToy = (i) => catOf(i) !== "clothes"; // toys and other things share the no-size layout
 const CAT_FILTER = { clothes: "clothes", toy: "toys", other: "other" };
-const filter = { wishlist: "all", closet: "clothes" }; // view-only, no requests
+const filter = { wishlist: "all", closet: "clothes", fit: "all" }; // view-only, no requests
 let closetQuery = ""; // closet search; filters what's already loaded, never makes a request
 const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[’']/g, "");
 const matches = (q, ...fields) => {
@@ -267,7 +267,7 @@ function printGroups(prints) {
   }
   return [...groups.keys()].sort((a, b) => a.localeCompare(b)).map((n) => {
     const b = brandByName(n);
-    const ps = groups.get(n).sort((a, b) => (a.printName || "").localeCompare(b.printName || ""));
+    const ps = groups.get(n).sort((a, b) => !!a.outgrown - !!b.outgrown || (a.printName || "").localeCompare(b.printName || ""));
     return `
       <div class="brand-head"><h2>${esc(n)}</h2>${b?.currentSize ? `<span class="chip">Wears ${esc(b.currentSize)}</span>` : ""}</div>
       <div class="grid">
@@ -277,21 +277,24 @@ function printGroups(prints) {
 }
 
 function clothesView(prints) {
+  const og = prints.filter((p) => p.outgrown);
+  const shown = filter.fit === "fits" ? prints.filter((p) => !p.outgrown) : filter.fit === "outgrown" ? og : prints;
   return `
-    <div class="note">Prints ${esc(CONFIG.babyName)} already has, and the styles she has them in. A print she has as a zippy can still be a lovely dress!</div>
+    <div class="note">Prints ${esc(CONFIG.babyName)} already has, and the styles she has them in. A print she has as a zippy can still be a lovely dress!${og.length ? ` Faded prints are ones she's <b>outgrown</b>. She'd love those again in a bigger size.` : ""}</div>
     ${favoritesView(prints)}
-    ${prints.length ? printGroups(prints) : `<div class="empty">No clothes listed yet.</div>`}`;
+    ${og.length ? filterChips("fit", [["all", "All", prints.length], ["fits", "Fits now", prints.length - og.length], ["outgrown", "Outgrown", og.length]]) : ""}
+    ${shown.length ? printGroups(shown) : `<div class="empty">${prints.length ? "Nothing here." : "No clothes listed yet."}</div>`}`;
 }
 
 function favoritesView(prints) {
-  const favPrints = prints.filter((p) => p.favorite).sort((a, b) => (a.printName || "").localeCompare(b.printName || ""));
+  const favPrints = prints.filter((p) => p.favorite).sort((a, b) => !!b.outgrown - !!a.outgrown || (a.printName || "").localeCompare(b.printName || ""));
   const favStyles = S.data.favoriteStyles || [];
   if (!favPrints.length && !favStyles.length) {
     return owner()
       ? `<div class="favs empty-favs"><b>Her favorites</b><span class="muted">Tap a print and turn on ★ Favorite print, or </span><button class="link" data-act="edit-favstyles">pick favorite styles</button></div>`
       : "";
   }
-  const hasStyle = (style) => prints.filter((p) => (p.types || []).some((t) => t.toLowerCase() === style.toLowerCase()));
+  const hasStyle = (style) => prints.filter((p) => !p.outgrown && (p.types || []).some((t) => t.toLowerCase() === style.toLowerCase()));
   return `
     <section class="favs" aria-label="Her favorites">
       <div class="favs-head"><h2>★ Her favorites</h2>${owner() ? `<button class="link" data-act="edit-favstyles">Edit styles</button>` : ""}</div>
@@ -301,7 +304,9 @@ function favoritesView(prints) {
           ${img(p.image, "fav-thumb", p.printName)}
           <div>
             <strong>${esc(p.printName || "Untitled print")}</strong>${p.brand ? `<span class="muted"> · ${esc(p.brand)}</span>` : ""}
-            <div class="fav-line">${(p.types || []).length ? `Has it as ${esc(p.types.join(", "))}. Any other style is welcome!` : "Any style in this print is welcome!"}</div>
+            <div class="fav-line">${p.outgrown
+              ? `<i class="pill og">Outgrown</i> Loved it and outgrew it. Any style in a bigger size is welcome!`
+              : (p.types || []).length ? `Has it as ${esc(p.types.join(", "))}. Any other style is welcome!` : "Any style in this print is welcome!"}</div>
           </div>
         </div>`).join("")}
       ${favStyles.map((style) => {
@@ -349,10 +354,14 @@ function thingsView(things, cat) {
 }
 
 function tile(rec, editAct, title, pills, sub = "") {
-  const inner = `${img(rec.image, "", title)}<span>${esc(title)}${sub ? `<small>${esc(sub)}</small>` : ""}${pills.length ? `<b class="pills">${pills.map((t) => `<i class="pill">${esc(t)}</i>`).join("")}</b>` : ""}</span>`;
+  const og = !!rec.outgrown;
+  const allPills = [...(og ? [`<i class="pill og">Outgrown</i>`] : []), ...pills.map((t) => `<i class="pill">${esc(t)}</i>`)];
+  const inner = `${img(rec.image, "", title)}<span>${esc(title)}${sub ? `<small>${esc(sub)}</small>` : ""}${allPills.length ? `<b class="pills">${allPills.join("")}</b>` : ""}</span>`;
+  const cls = `print${og ? " outgrown" : ""}`;
+  const label = og ? ` aria-label="${esc(title)}, outgrown"` : "";
   return owner()
-    ? `<button class="print editable" data-act="${editAct}" data-id="${rec.id}">${inner}</button>`
-    : `<div class="print">${inner}</div>`;
+    ? `<button class="${cls} editable" data-act="${editAct}" data-id="${rec.id}"${label}>${inner}</button>`
+    : `<div class="${cls}"${label}>${inner}</div>`;
 }
 
 function sizesView() {
@@ -616,6 +625,7 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
     </div>
     <div data-show="cc">
       <label class="check"><input type="checkbox" id="f-fav" name="favorite" ${e.favorite ? "checked" : ""}> ★ Favorite print</label>
+      <label class="check"><input type="checkbox" id="f-og" name="outgrown" ${e.outgrown ? "checked" : ""}> Outgrown <span class="muted">(welcome again in a bigger size)</span></label>
       <div class="label-row"><label class="f">Styles she has in this print</label>${manageLink("clothes")}</div>
       <div class="type-picker" data-cat="clothes" role="group" aria-label="Styles she has">${typePills("clothes", e.types || [])}</div>
     </div>
@@ -716,7 +726,7 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
       if (m === "cc") {
         if (!v("printName") && !common.brand) throw new Error("Add at least a brand or a print name.");
         const types = [...el.querySelectorAll('.type-opt[aria-pressed="true"]')].map((b) => b.dataset.type);
-        await store.upsertPrint({ ...common, printName: v("printName"), types, favorite: f("favorite").checked });
+        await store.upsertPrint({ ...common, printName: v("printName"), types, favorite: f("favorite").checked, outgrown: f("outgrown").checked });
       } else if (m === "ct" || m === "co") {
         if (!v("title")) throw new Error("Give it a name.");
         await store.upsertToy({ ...common, category: cat, name: v("title"), type: f(cat === "toy" ? "toyType" : "otherType").value });
