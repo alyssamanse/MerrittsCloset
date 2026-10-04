@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1004-1617";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-1617";
-const BUILD = "1004-1617"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1004-1755";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-1755";
+const BUILD = "1004-1755"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = ["wishlist", "closet", "sizes"];
@@ -1615,6 +1615,7 @@ async function checkForNewVersion() {
     const html = await (await fetch(location.pathname + "?check=" + Date.now(), { cache: "no-store" })).text();
     const live = (html.match(/app\.js\?v=([\w-]+)/) || [])[1];
     if (!live || live === BUILD) return;
+    if (document.querySelector(".sheet-bg")) return; // never reload over a form being filled in; next check will
     const key = "closet:reloadedFor";
     if (sessionStorage.getItem(key) === live) return; // tried already this session; don't loop
     sessionStorage.setItem(key, live);
@@ -1624,6 +1625,7 @@ async function checkForNewVersion() {
   } catch {}
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForNewVersion(); });
+setInterval(() => { if (document.visibilityState === "visible") checkForNewVersion(); }, 15 * 60 * 1000);
 
 // ── boot ─────────────────────────────────────────────────────────────
 document.title = `${CONFIG.babyName}'s Closet`;
