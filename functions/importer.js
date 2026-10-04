@@ -205,8 +205,20 @@ function sizeRank(raw) {
   if (m) return Number(m[1]) * 12;
   return null;
 }
+// Kids' shoe sizes ("4C", "4", "4 Toddler", "5.5 Infant") sit on their own scale, never mixed with months.
+// A rank is { shoe: true, n } for shoes, or a number of months for clothes.
+function shoeRank(raw) {
+  const s = String(raw || "").toLowerCase().trim();
+  const m = /^(\d{1,2}(?:\.5)?)\s*(?:c|k|t|toddler|toddlers|infant|baby|little kid|big kid)?$/.exec(s) || /^(?:us\s*)?(\d{1,2}(?:\.5)?)\s*c\b/.exec(s);
+  return m ? { shoe: true, n: Number(m[1]) } : null;
+}
 // Available in this size or bigger? Unknown sizes count as fitting.
-const fits = (size, minRank) => minRank == null || sizeRank(size) == null || sizeRank(size) >= minRank;
+const fits = (size, minRank) => {
+  if (minRank == null) return true;
+  if (typeof minRank === "object") { const r = shoeRank(size); return r == null || r.n >= minRank.n; }
+  const r = sizeRank(size);
+  return r == null || r >= minRank;
+};
 
 function shopifyInStock(p, minRank) {
   const opts = (p.options || []).map((o) => (typeof o === "string" ? o : o.name || ""));
@@ -234,7 +246,7 @@ function ldInStock(html, minRank) {
 // Is this product still for sale in her size or bigger?
 // "in", "out" (every size from minSize up is sold out, or the page is gone) or "unknown".
 async function checkStock(rawUrl, minSize = "") {
-  const minRank = sizeRank(minSize);
+  const minRank = /c$/i.test(String(minSize || "").trim()) ? shoeRank(minSize) : sizeRank(minSize);
   let u;
   try { u = checkUrl(rawUrl); } catch { return "unknown"; }
   const shop = /^(.*\/products\/[^/?#]+)/.exec(u.origin + u.pathname)?.[1];
@@ -252,4 +264,4 @@ async function checkStock(rawUrl, minSize = "") {
   return a === true ? "in" : a === false ? "out" : "unknown";
 }
 
-module.exports = { fromWayback, sizeRank, shopifyInStock, checkStock, availability, importLink, parseShopify, parseHtml, printFromTitle, checkUrl, httpError };
+module.exports = { fromWayback, sizeRank, shoeRank, shopifyInStock, checkStock, availability, importLink, parseShopify, parseHtml, printFromTitle, checkUrl, httpError };

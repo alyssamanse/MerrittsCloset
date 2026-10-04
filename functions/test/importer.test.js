@@ -40,3 +40,13 @@ test("retired product page falls back to the Wayback Machine", async () => {
     assert.equal(r.image, "https://web.archive.org/web/20240501000000im_/https://cdn.example/moon.jpg", "uses the archive's copy when the original photo is gone");
   } finally { global.fetch = real; }
 });
+
+test("shoe sizes: sold out only if her size and bigger are gone", () => {
+  const { shopifyInStock, shoeRank } = require("../importer");
+  const p = (avail) => ({ options: ["Size"], variants: Object.entries(avail).map(([option1, available]) => ({ option1, available })) });
+  const min = shoeRank("4C");
+  assert.deepEqual(min, { shoe: true, n: 4 });
+  assert.equal(shopifyInStock(p({ "3": true, "4": false, "5": false }), min), false);
+  assert.equal(shopifyInStock(p({ "3": false, "4": false, "5 Toddler": true }), min), true);
+  assert.equal(shopifyInStock(p({ "4C": false, "4.5C": true }), min), true);
+});

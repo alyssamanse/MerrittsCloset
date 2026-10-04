@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1004-1144";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-1144";
-const BUILD = "1004-1144"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1004-1353";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-1353";
+const BUILD = "1004-1353"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = ["wishlist", "closet", "sizes"];
@@ -672,7 +672,7 @@ function planSheet(existing) {
   const rowHtml = (r, i) => `
     <div class="plan-row${r.skip ? " is-skip" : ""}" data-i="${i}">
       <select class="in" data-f="style" aria-label="Style"><option value="">Any style</option>${[...new Set([...(r.style ? [r.style] : []), ...styles])].map((s) => `<option ${s === r.style ? "selected" : ""}>${esc(s)}</option>`).join("")}</select>
-      ${sizeSelect(`data-f="size" aria-label="Size" ${r.skip ? "disabled" : ""}`, r.size, { blank: "Size" })}
+      ${sizeSelect(`data-f="size" aria-label="Size" data-kind="${isShoeType(r.style) ? "shoes" : "clothes"}" ${r.skip ? "disabled" : ""}`, r.size, { blank: "Size", kind: isShoeType(r.style) ? "shoes" : "clothes" })}
       <label class="skip-toggle"><input type="checkbox" data-f="skip" ${r.skip ? "checked" : ""}> Won't need</label>
       <button class="icon-btn danger" data-m="remove" aria-label="Remove line">×</button>
     </div>`;
@@ -705,7 +705,13 @@ function planSheet(existing) {
         if (f === "skip") { r.skip = ev.target.checked; if (r.skip) r.size = ""; draw(); }
         else if (f) r[f] = ev.target.value;
       });
-      wrap.addEventListener("change", (ev) => { const f = ev.target.dataset.f; if (f === "style" || f === "size") rows[Number(ev.target.closest(".plan-row").dataset.i)][f] = ev.target.value; });
+      wrap.addEventListener("change", (ev) => {
+        const f = ev.target.dataset.f;
+        if (f !== "style" && f !== "size") return;
+        const rowEl = ev.target.closest(".plan-row"), r = rows[Number(rowEl.dataset.i)];
+        r[f] = ev.target.value;
+        if (f === "style") { const sel = rowEl.querySelector('[data-f="size"]'); setSizeKind(sel, isShoeType(r.style) ? "shoes" : "clothes", "Size"); r.size = sel.value; }
+      });
       wrap.addEventListener("click", (ev) => {
         if (ev.target.closest('[data-m="remove"]')) { rows.splice(Number(ev.target.closest(".plan-row").dataset.i), 1); draw(); }
       });
@@ -1167,10 +1173,30 @@ function closeSheet(rerender = true) {
 // Clothing sizes offered in dropdowns (occasions, brand sizes, wishlist clothes).
 const CLOTHING_SIZES = ["6–9M", "6–12M", "12–18M", "18–24M", "2T", "3T", "4T"];
 const dash = (v) => String(v || "").trim().replace(/(\d)\s*-\s*(\d)/g, "$1–$2");
-function sizeSelect(attrs, current = "", { blank = "Choose a size" } = {}) {
+// Kids' shoe sizes (US "C" sizing), shown instead when the type is shoes.
+const SHOE_SIZES = ["1C", "2C", "3C", "3.5C", "4C", "4.5C", "5C", "5.5C", "6C", "6.5C", "7C", "7.5C", "8C", "8.5C", "9C", "9.5C", "10C"];
+const isShoeType = (t) => /shoe|boot|sandal|sneaker|moccasin|slipper|moc\b/i.test(t || "");
+const isShoeSize = (v) => SHOE_SIZES.includes(String(v || "").trim().toUpperCase());
+// kind: "clothes" | "shoes" | "both" (both = grouped, for a brand's current size)
+function sizeOptionsHtml(kind, current, blank) {
   const cur = dash(current);
-  const opts = [...(cur && !CLOTHING_SIZES.includes(cur) ? [cur] : []), ...CLOTHING_SIZES];
-  return `<select class="in" ${attrs}><option value="">${esc(blank)}</option>${opts.map((x) => `<option ${x === cur ? "selected" : ""}>${esc(x)}</option>`).join("")}</select>`;
+  const opt = (x) => `<option ${x === cur ? "selected" : ""}>${esc(x)}</option>`;
+  const known = [...CLOTHING_SIZES, ...SHOE_SIZES].includes(cur);
+  const extra = cur && !known ? opt(cur) : "";
+  const body = kind === "both"
+    ? `<optgroup label="Clothing">${CLOTHING_SIZES.map(opt).join("")}</optgroup><optgroup label="Shoes">${SHOE_SIZES.map(opt).join("")}</optgroup>`
+    : (kind === "shoes" ? SHOE_SIZES : CLOTHING_SIZES).map(opt).join("") + (cur && known && !(kind === "shoes" ? SHOE_SIZES : CLOTHING_SIZES).includes(cur) ? opt(cur) : "");
+  return `<option value="">${esc(blank)}</option>${extra}${body}`;
+}
+function sizeSelect(attrs, current = "", { blank = "Choose a size", kind = "clothes" } = {}) {
+  return `<select class="in" ${attrs}>${sizeOptionsHtml(kind, current, blank)}</select>`;
+}
+// Swap a size dropdown between clothing and shoe sizes, keeping the choice if it still fits.
+function setSizeKind(sel, kind, blank = "Choose a size") {
+  if (!sel || sel.dataset.kind === kind) return;
+  const keep = (kind === "shoes" ? SHOE_SIZES : CLOTHING_SIZES).includes(sel.value) ? sel.value : "";
+  sel.innerHTML = sizeOptionsHtml(kind, keep, blank);
+  sel.dataset.kind = kind;
 }
 // Set a size dropdown's value, adding the option first if it isn't in the list.
 function setSize(sel, v) {
@@ -1267,7 +1293,7 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
       <div class="type-picker" data-cat="clothes" role="group" aria-label="Styles she has">${typePills("clothes", e.types || [])}</div>
     </div>
     <div class="row" data-show="wc wt wo">
-      <div data-show="wc"><label class="f" for="f-size">Size</label>${sizeSelect('id="f-size" name="size"', e.size || "")}</div>
+      <div data-show="wc"><label class="f" for="f-size">Size</label>${sizeSelect(`id="f-size" name="size" data-kind="${isShoeType(e.type) ? "shoes" : "clothes"}"`, e.size || "", { kind: isShoeType(e.type) ? "shoes" : "clothes" })}</div>
       <div data-show="wt"><label class="f" for="f-age">Age range</label><input class="in" id="f-age" name="ageRange" maxlength="20" value="${esc(e.ageRange || "")}" placeholder="6m+" /></div>
       <div><label class="f" for="f-price">Price</label><input class="in" id="f-price" name="price" maxlength="20" value="${esc(e.price || "")}" placeholder="$38" /></div>
     </div>
@@ -1316,10 +1342,14 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
     }
     wireTypeControls(el, "Up to 8 styles per print");
     f("image").addEventListener("change", () => (el.querySelector("#pv").src = safeUrl(f("image").value) || PLACEHOLDER));
-    f("brand").addEventListener("change", () => {
+    // Brand's saved size fills in only when it's the right kind (shoe size for shoes, clothing size otherwise).
+    const fillBrandSize = () => {
       const b = brandByName(f("brand").value);
-      if (cat === "clothes" && b?.currentSize && !f("size").value) setSize(f("size"), b.currentSize);
-    });
+      if (cat !== "clothes" || !b?.currentSize || f("size").value) return;
+      if (isShoeSize(b.currentSize) === isShoeType(f("type").value)) setSize(f("size"), b.currentSize);
+    };
+    f("type").addEventListener("change", () => { setSizeKind(f("size"), isShoeType(f("type").value) ? "shoes" : "clothes"); fillBrandSize(); });
+    f("brand").addEventListener("change", fillBrandSize);
 
     // Link import runs only on tap (never per keystroke) and is locked while running.
     const importBtn = el.querySelector('[data-act="import"]');
@@ -1340,8 +1370,7 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
         if (r.image) { f("image").value = r.image; el.querySelector("#pv").src = r.image; }
         if (cat === "clothes") {
           // (store sizes vary by brand; the dropdown keeps to her standard sizes)
-          const b = brandByName(f("brand").value);
-          if (b?.currentSize && !f("size").value) setSize(f("size"), b.currentSize);
+          fillBrandSize();
         }
         if (!r.title && !r.image) throw new Error("That store didn't share any details. Fill them in below.");
         if (r.fromArchive) toast("That page is gone, so this came from a saved copy");
@@ -1397,7 +1426,7 @@ function brandSheet(existing = null) {
   openSheet(
     `<h2>${existing ? "Edit Brand" : "Add Brand"}</h2>
      <label class="f" for="b-name">Brand</label><input class="in" id="b-name" name="name" maxlength="60" value="${esc(b.name || "")}" placeholder="Little Sleepies" />
-     <label class="f" for="b-size">Current size</label>${sizeSelect('id="b-size" name="currentSize"', b.currentSize || "")}
+     <label class="f" for="b-size">Current size</label>${sizeSelect('id="b-size" name="currentSize"', b.currentSize || "", { kind: "both" })}
      <label class="f" for="b-notes">Sizing note (optional)</label><input class="in" id="b-notes" name="notes" maxlength="140" value="${esc(b.notes || "")}" placeholder="Runs small, size up" />
      <datalist id="dl-sizes">${sizeOptions()}</datalist>
      <div class="err sheet-err" hidden></div>
