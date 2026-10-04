@@ -413,6 +413,14 @@
   .btn.soft { color: var(--moss); -webkit-text-fill-color: var(--moss); }
   .plan-row { grid-template-columns: 1fr 1fr; }
   select.in { appearance: none; -webkit-appearance: none; padding-right: 34px; background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%238B7F7A' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 12px center; }
+  /* Wishlist sections + sort */
+  .wl-sort { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 4px 0 2px; font: 600 13px/1 var(--sans); color: var(--taupe); }
+  .wl-sort select.in { width: auto; min-width: 0; padding-top: 7px; padding-bottom: 7px; font-size: 14px; }
+  .wl-list { padding: 2px 0 14px; }
+  .wl-brand { font-size: 15px; font-weight: 700; margin: 14px 0 8px; display: flex; gap: 6px; align-items: baseline; }
+  .wl-brand:first-child { margin-top: 4px; }
+  .wl-brand .muted { font-weight: 500; font-size: 13px; }
+  .wl-fold > summary h2 { font-size: 20px; }
   /* Family page */
   .back-row { margin: -6px 0 4px; }
   .back-row .link { padding-left: 0; }
@@ -462,6 +470,6 @@
 </head>
 <body>
   <div id="app"></div>
-  <script type="module" src="app.js?v=1004-1755"></script>
+  <script type="module" src="app.js?v=1004-1858"></script>
 </body>
 </html>

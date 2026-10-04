@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1004-1755";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-1755";
-const BUILD = "1004-1755"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1004-1858";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-1858";
+const BUILD = "1004-1858"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = ["wishlist", "closet", "sizes"];
@@ -194,19 +194,67 @@ const filterChips = (which, options) => `
     ${options.map(([v, label, n]) => `<button class="filter" data-filter="${which}:${v}" aria-pressed="${filter[which] === v}">${label}${n != null ? ` <span>${n}</span>` : ""}</button>`).join("")}
   </div>`;
 
+// Wishlist: Most Wanted on top, then Clothes (by brand), Toys and Other, with claimed
+// items tucked into a closed section at the bottom. The sort applies inside each section.
+const WL_SORTS = [["most", "Most Wanted"], ["price", "Price: Low to High"], ["brand", "Brand A–Z"], ["newest", "Newest"]];
+let wlSort = "most";
+try { const v = localStorage.getItem("closet:wlSort"); if (WL_SORTS.some(([k]) => k === v)) wlSort = v; } catch {}
+const wlOpen = {}; // section open/closed, kept across redraws
+const priceNum = (p) => { const n = parseFloat(String(p || "").replace(/[^0-9.]/g, "")); return Number.isFinite(n) ? n : Infinity; };
+const mostFirst = (a, b) => (a.priority === "most" ? 0 : 1) - (b.priority === "most" ? 0 : 1);
+const brandName = (i) => brandByName(i.brand)?.name || (i.brand || "").trim();
+function wlCompare(a, b) {
+  const out = (a.stock === "out") - (b.stock === "out"); // sold out sinks in every sort
+  if (out) return out;
+  const t = (x) => (x.title || "").toLowerCase();
+  if (wlSort === "price") return priceNum(a.price) - priceNum(b.price) || mostFirst(a, b) || t(a).localeCompare(t(b));
+  if (wlSort === "brand") return brandKey(a.brand).localeCompare(brandKey(b.brand)) || t(a).localeCompare(t(b));
+  if (wlSort === "newest") return (b.createdAt || 0) - (a.createdAt || 0);
+  return mostFirst(a, b) || (a.createdAt || 0) - (b.createdAt || 0);
+}
+function wlSection(key, title, items, inner, { open = true } = {}) {
+  if (!items.length) return "";
+  const isOpen = wlOpen[key] ?? open;
+  return `<details class="brand-fold wl-fold" data-wl="${key}" ${isOpen ? "open" : ""}>
+    <summary class="brand-head"><h2>${title}</h2><span class="brand-meta">${items.length} ${items.length === 1 ? "Item" : "Items"}</span><span class="chev" aria-hidden="true"></span></summary>
+    <div class="wl-list">${inner}</div>
+  </details>`;
+}
+// Clothes are grouped by brand (Most Wanted / Brand sorts); a price or date sort reads best as one list.
+function clothesInner(items) {
+  if (wlSort === "price" || wlSort === "newest") return items.map(itemCard).join("");
+  const groups = new Map();
+  for (const i of items) {
+    const k = brandKey(i.brand) || "~";
+    if (!groups.has(k)) groups.set(k, { name: brandName(i) || "Other Brands", items: [] });
+    groups.get(k).items.push(i);
+  }
+  return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))
+    .map(([, g]) => `<h3 class="wl-brand">${esc(g.name)} <span class="muted">${g.items.length}</span></h3>${g.items.map(itemCard).join("")}`).join("");
+}
 function wishlistView() {
   const all = list(S.data.items);
   const count = (c) => all.filter((i) => catOf(i) === c).length;
-  const shown = all
-    .filter((i) => filter.wishlist === "all" || CAT_FILTER[catOf(i)] === filter.wishlist)
-    .sort((a, b) => isClaimed(a.id) - isClaimed(b.id) || (a.stock === "out") - (b.stock === "out") || (a.priority === "most" ? 0 : 1) - (b.priority === "most" ? 0 : 1) || (a.createdAt || 0) - (b.createdAt || 0));
-  const open = shown.filter((i) => !isClaimed(i.id)).length;
+  const shown = all.filter((i) => filter.wishlist === "all" || CAT_FILTER[catOf(i)] === filter.wishlist).sort(wlCompare);
+  const openItems = shown.filter((i) => !isClaimed(i.id));
+  const claimed = shown.filter((i) => isClaimed(i.id));
+  const top = wlSort === "most" ? openItems.filter((i) => i.priority === "most" && i.stock !== "out") : [];
+  const rest = openItems.filter((i) => !top.includes(i));
+  const of = (c) => rest.filter((i) => catOf(i) === c);
   const soldOut = all.filter((i) => i.stock === "out" && !isClaimed(i.id)).length;
+  const sections = [
+    wlSection("most", "Most Wanted", top, top.map(itemCard).join("")),
+    wlSection("clothes", "Clothes", of("clothes"), clothesInner(of("clothes"))),
+    wlSection("toy", "Toys", of("toy"), of("toy").map(itemCard).join("")),
+    wlSection("other", "Other", of("other"), of("other").map(itemCard).join("")),
+    wlSection("claimed", "Already Claimed", claimed, claimed.map(itemCard).join(""), { open: false }),
+  ].join("");
   return `
     ${owner() ? stockBanner(all, soldOut) : `<div class="note">Tap <b>I'll get this</b> so nobody doubles up. It's anonymous, and you can undo it from this same phone or computer.</div>`}
-    <div class="section-title"><h2>Wishlist</h2><span class="muted">${open} still open</span></div>
+    <div class="section-title"><h2>Wishlist</h2><span class="muted">${openItems.length} still open</span></div>
     ${filterChips("wishlist", [["all", "All", all.length], ["clothes", "Clothes", count("clothes")], ["toys", "Toys", count("toy")], ["other", "Other", count("other")]])}
-    ${shown.length ? shown.map(itemCard).join("") : `<div class="empty">Nothing here right now.</div>`}`;
+    <label class="wl-sort"><span>Sort</span><select class="in" id="wl-sort" aria-label="Sort the wishlist">${WL_SORTS.map(([k, l]) => `<option value="${k}" ${k === wlSort ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+    ${sections || `<div class="empty">Nothing here right now.</div>`}`;
 }
 
 function stockBanner(all, soldOut) {
@@ -1520,6 +1568,11 @@ $app.addEventListener("input", (ev) => {
   if (out) out.innerHTML = closetResults();
 });
 $app.addEventListener("change", (ev) => {
+  if (ev.target.id === "wl-sort") {
+    wlSort = ev.target.value;
+    try { localStorage.setItem("closet:wlSort", wlSort); } catch {}
+    return render();
+  }
   if (ev.target.id !== "og-toggle") return;
   showOtherOutgrown = ev.target.checked;
   try { localStorage.setItem("closet:hideOtherOutgrown", showOtherOutgrown ? "0" : "1"); } catch {}
@@ -1529,6 +1582,7 @@ $app.addEventListener("change", (ev) => {
 $app.addEventListener("toggle", (ev) => { // remember which brands are open across re-renders
   const d = ev.target;
   if (d.dataset?.favs !== undefined) { favsOpen = d.open; return; }
+  if (d.classList?.contains("wl-fold")) { wlOpen[d.dataset.wl] = d.open; return; }
   if (d.classList?.contains("person-fold")) { if (d.open) openPeople.add(d.dataset.person); else openPeople.delete(d.dataset.person); return; }
   if (d.classList?.contains("brand-fold")) { if (d.open) openBrands.add(d.dataset.brand); else openBrands.delete(d.dataset.brand); }
 }, true);
