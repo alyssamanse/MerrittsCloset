@@ -426,10 +426,22 @@
   .to-top svg { width: 42px; height: 42px; padding: 10px; border-radius: 50%; border: 1px solid var(--blush-2); background: var(--surface); fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .to-top:hover svg { background: var(--rose-lt); }
   a.title-link:hover, a.title-link:focus-visible { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+  /* Closet photos enlarge on tap */
+  .tile-img { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
+  .tile-img img { display: block; }
+  .tile-cap { display: block; width: 100%; padding: 0; border: 0; background: none; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+  .lightbox { position: fixed; inset: 0; z-index: 50; background: rgba(38,30,32,.88); display: flex; align-items: center; justify-content: center; padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)); }
+  .lightbox figure { margin: 0; display: grid; gap: 12px; justify-items: center; max-width: 100%; }
+  .lb-img { width: min(92vw, 560px); max-height: 72vh; height: auto; object-fit: contain; border-radius: 6px; background: var(--surface); }
+  .lightbox figcaption { color: #FBF7F2; text-align: center; display: grid; gap: 3px; font-size: 14px; }
+  .lightbox figcaption b { font-size: 17px; font-weight: 700; }
+  .lightbox figcaption span { opacity: .8; }
+  .lightbox figcaption .link { color: #F4D9D6; justify-self: center; }
+  .lb-close { position: absolute; top: calc(10px + env(safe-area-inset-top)); right: 12px; width: 44px; height: 44px; border-radius: 50%; border: 0; background: rgba(255,255,255,.14); color: #fff; font-size: 26px; line-height: 1; cursor: pointer; }
 </style>
 </head>
 <body>
   <div id="app"></div>
-  <script type="module" src="app.js?v=1004-0950"></script>
+  <script type="module" src="app.js?v=1004-1011"></script>
 </body>
 </html>

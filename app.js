@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1004-0950";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-0950";
-const BUILD = "1004-0950"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1004-1011";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-1011";
+const BUILD = "1004-1011"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = ["wishlist", "closet", "sizes"];
@@ -422,12 +422,19 @@ function thingsView(things, cat) {
 function tile(rec, editAct, title, pills, sub = "") {
   const og = !!rec.outgrown;
   const allPills = [...(og ? [`<i class="pill og">Outgrown</i>`] : []), ...pills.map((t) => `<i class="pill">${esc(t)}</i>`)];
-  const inner = `${img(rec.image, "", title)}<span>${esc(title)}${sub ? `<small>${esc(sub)}</small>` : ""}${allPills.length ? `<b class="pills">${allPills.join("")}</b>` : ""}</span>`;
+  const caption = `<span>${esc(title)}${sub ? `<small>${esc(sub)}</small>` : ""}${allPills.length ? `<b class="pills">${allPills.join("")}</b>` : ""}</span>`;
   const cls = `print${og ? " outgrown" : ""}`;
   const label = og ? ` aria-label="${esc(title)}, outgrown"` : "";
-  return owner()
-    ? `<button class="${cls} editable" data-act="${editAct}" data-id="${rec.id}"${label}>${inner}</button>`
-    : `<div class="${cls}"${label}>${inner}</div>`;
+  // Tapping a photo enlarges it (for everyone). For the owner, tapping the name opens Edit;
+  // a tile with no photo yet opens Edit from anywhere so a photo can be added.
+  const hasPhoto = !!safeUrl(rec.image);
+  const zoom = `<button class="tile-img" data-act="zoom" data-kind="${editAct}" data-id="${rec.id}" aria-label="Enlarge photo of ${esc(title)}">${img(rec.image, "", title)}</button>`;
+  if (owner()) {
+    return hasPhoto
+      ? `<div class="${cls} editable"${label}>${zoom}<button class="tile-cap" data-act="${editAct}" data-id="${rec.id}" aria-label="Edit ${esc(title)}">${caption}</button></div>`
+      : `<button class="${cls} editable" data-act="${editAct}" data-id="${rec.id}"${label}>${img(rec.image, "", title)}${caption}</button>`;
+  }
+  return `<div class="${cls}"${label}>${hasPhoto ? zoom : img(rec.image, "", title)}${caption}</div>`;
 }
 
 function sizesView() {
@@ -697,6 +704,37 @@ function planSheet(existing) {
       });
     }
   );
+}
+
+// ── enlarge a closet photo ───────────────────────────────────────────
+function openLightbox(kind, id) {
+  const rec = kind === "edit-toy" ? S.data.toys?.[id] : S.data.prints?.[id];
+  if (!rec?.image) return;
+  const title = rec.printName || rec.name || "Photo";
+  const sub = [rec.brand, ...(rec.types || []), rec.type].filter(Boolean).join(" · ");
+  document.querySelector(".lightbox")?.remove();
+  const box = document.createElement("div");
+  box.className = "lightbox";
+  box.setAttribute("role", "dialog");
+  box.setAttribute("aria-modal", "true");
+  box.setAttribute("aria-label", title);
+  box.innerHTML = `
+    <button class="lb-close" aria-label="Close">×</button>
+    <figure>${img(rec.image, "lb-img", title)}
+      <figcaption><b>${esc(title)}</b>${sub ? `<span>${esc(sub)}</span>` : ""}${rec.outgrown ? `<span>Outgrown, welcome again in a bigger size</span>` : ""}
+        ${owner() ? `<button class="link" data-lb="edit">Edit</button>` : ""}</figcaption>
+    </figure>`;
+  const close = () => { box.remove(); document.body.style.overflow = ""; document.removeEventListener("keydown", onKey); opener?.focus?.(); };
+  const onKey = (ev) => { if (ev.key === "Escape") close(); };
+  const opener = document.activeElement;
+  box.addEventListener("click", (ev) => {
+    if (ev.target.closest('[data-lb="edit"]')) { close(); return itemSheet({ dest: "closet", cat: kind === "edit-toy" ? hasCat(rec) : "clothes", existing: rec }); }
+    if (ev.target === box || ev.target.closest(".lb-close")) close();
+  });
+  document.addEventListener("keydown", onKey);
+  document.body.appendChild(box);
+  document.body.style.overflow = "hidden";
+  box.querySelector(".lb-close").focus();
 }
 
 // ── share ────────────────────────────────────────────────────────────
@@ -1253,6 +1291,7 @@ $app.addEventListener("click", (ev) => {
     case "go-tab": tab = t.dataset.to; history.replaceState(null, "", `${location.search}#${tab}`); render(); window.scrollTo({ top: 0 });
       if (t.dataset.focus) document.getElementById(t.dataset.focus)?.focus(); return;
     case "share": return shareSheet();
+    case "zoom": return openLightbox(t.dataset.kind, id);
     case "to-top": window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); return;
     case "fold-all":
       for (const d of document.querySelectorAll(".brand-fold")) { d.open = t.dataset.open === "1"; if (d.open) openBrands.add(d.dataset.brand); else openBrands.delete(d.dataset.brand); }
