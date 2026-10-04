@@ -2,7 +2,8 @@ import { CONFIG } from "./config.js";
 import { createFirebaseStore, createDemoStore } from "./store.js";
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
-const TABS = ["wishlist", "closet", "sizes"];
+const TABS = ["wishlist", "ideas", "closet", "sizes"];
+const TAB_LABEL = { wishlist: "Wishlist", ideas: "Gift ideas", closet: "Closet", sizes: "Sizes" };
 const OTHER_TYPES = ["Blanket", "Swaddle", "Lovey", "Bedding", "Bath", "Feeding", "Books", "Room decor", "Gear", "Keepsake"];
 const TOY_TYPES = ["Rattle", "Teether", "Stacker", "Blocks", "Book", "Plush", "Bath", "Music", "Activity", "Push & ride", "Puzzle", "Pretend play", "Outdoor"];
 const TYPES = ["Zippy", "Shorty", "Footie", "Romper", "Bodysuit", "Two-piece PJs", "Two-piece daywear", "Pajamas", "Dress", "Bubble", "Swim", "Outerwear", "Separates", "Swaddle", "Sleep bag", "Blanket", "Bib", "Hat", "Bow", "Shoes", "Accessory"];
@@ -35,7 +36,7 @@ const catOf = (i) => (i.category === "toy" || i.category === "other" ? i.categor
 const hasCat = (t) => (t.category === "other" ? "other" : "toy");                             // "what she has" non-clothes
 const isToy = (i) => catOf(i) !== "clothes"; // toys and other things share the no-size layout
 const CAT_FILTER = { clothes: "clothes", toy: "toys", other: "other" };
-const filter = { wishlist: "all", closet: "clothes", fit: "all" }; // view-only, no requests
+const filter = { wishlist: "all", closet: "clothes", fit: "all", plan: "" }; // view-only, no requests
 let closetQuery = ""; // closet search; filters what's already loaded, never makes a request
 const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[’']/g, "");
 const matches = (q, ...fields) => {
@@ -115,11 +116,12 @@ function render() {
       <p>Wishlist · favorite brands · what she already has</p>
     </header>
     <nav class="tabs" role="tablist">
-      ${TABS.map((t) => `<button class="tab" role="tab" aria-selected="${tab === t}" data-tab="${t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join("")}
+      ${TABS.map((t) => `<button class="tab" role="tab" aria-selected="${tab === t}" data-tab="${t}">${TAB_LABEL[t]}</button>`).join("")}
     </nav>
     <main>${adminPanel()}${body()}</main>
     ${owner() && S.status === "ok" ? `<button class="btn fab" data-act="add">+ Add</button>` : ""}
     <footer>
+      <button class="link quiet" data-act="share">Share</button><span class="muted"> · </span>
       <button class="link quiet" data-act="refresh" ${dis("refresh")}>Refresh</button>
       ${S.user ? `<span class="muted"> · ${owner() ? "Editing on" : "Signed in"} · </span><button class="link" data-act="signout">Sign out</button>` : ""}
     </footer>`;
@@ -146,7 +148,7 @@ function body() {
     : `<div class="empty">This list isn't available right now.</div>`;
   if (S.status === "unavailable") return `<div class="empty">This list isn't available right now.</div>`;
   if (S.status === "empty") return `<div class="empty">${owner() ? "Setting up your list…" : "This list isn't available right now."}</div>`;
-  return tab === "wishlist" ? wishlistView() : tab === "closet" ? closetView() : sizesView();
+  return tab === "wishlist" ? wishlistView() : tab === "ideas" ? ideasView() : tab === "closet" ? closetView() : sizesView();
 }
 
 const filterChips = (which, options) => `
@@ -159,14 +161,30 @@ function wishlistView() {
   const count = (c) => all.filter((i) => catOf(i) === c).length;
   const shown = all
     .filter((i) => filter.wishlist === "all" || CAT_FILTER[catOf(i)] === filter.wishlist)
-    .sort((a, b) => isClaimed(a.id) - isClaimed(b.id) || (a.priority === "most" ? 0 : 1) - (b.priority === "most" ? 0 : 1) || (a.createdAt || 0) - (b.createdAt || 0));
+    .sort((a, b) => isClaimed(a.id) - isClaimed(b.id) || (a.stock === "out") - (b.stock === "out") || (a.priority === "most" ? 0 : 1) - (b.priority === "most" ? 0 : 1) || (a.createdAt || 0) - (b.createdAt || 0));
   const open = shown.filter((i) => !isClaimed(i.id)).length;
+  const soldOut = all.filter((i) => i.stock === "out" && !isClaimed(i.id)).length;
   return `
-    ${owner() ? "" : `<div class="note">Tap <b>I'll get this</b> so nobody doubles up. It's anonymous, and you can undo it from this same phone or computer.</div>`}
+    ${owner() ? stockBanner(all, soldOut) : `<div class="note">Tap <b>I'll get this</b> so nobody doubles up. It's anonymous, and you can undo it from this same phone or computer.</div>`}
     <div class="section-title"><h2>Wishlist</h2><span class="muted">${open} still open</span></div>
     ${filterChips("wishlist", [["all", "All", all.length], ["clothes", "Clothes", count("clothes")], ["toys", "Toys", count("toy")], ["other", "Other", count("other")]])}
     ${shown.length ? shown.map(itemCard).join("") : `<div class="empty">Nothing here right now.</div>`}`;
 }
+
+function stockBanner(all, soldOut) {
+  const linked = all.filter((i) => i.url && !isClaimed(i.id));
+  if (!linked.length) return "";
+  const last = Math.min(...linked.map((i) => i.stockAt || 0));
+  const when = last ? `Checked ${ago(last)}` : "Not checked yet";
+  return `<div class="stock-bar${soldOut ? " alert" : ""}">
+    <span>${soldOut ? `<b>${soldOut} ${soldOut === 1 ? "item looks" : "items look"} sold out.</b> Swap the link or remove ${soldOut === 1 ? "it" : "them"}.` : "Wishlist links are in stock."} <span class="muted">${when}</span></span>
+    <button class="link" data-act="check-stock" ${dis("stock")}>${busy.has("stock") ? stockProgress || "Checking…" : "Check now"}</button>
+  </div>`;
+}
+const ago = (t) => {
+  const d = Math.round((Date.now() - t) / 86400000);
+  return d <= 0 ? "today" : d === 1 ? "yesterday" : `${d} days ago`;
+};
 
 function itemCard(i) {
   const claimed = isClaimed(i.id);
@@ -188,6 +206,7 @@ function itemCard(i) {
         i.printFlexible && `<span class="chip moss">Any print OK</span>`,
         i.price && `<span class="chip tan">${esc(i.price)}</span>`,
       ];
+  if (i.stock === "out") chips.unshift(`<span class="chip warn">Sold out online</span>`);
   const k = (a) => `${a}:${i.id}`;
 
   let actions;
@@ -225,7 +244,7 @@ function itemCard(i) {
 
 function closetView() {
   return `
-    <div class="section-title"><h2>What she has</h2>${owner() ? `<button class="link" data-act="import-list">Import list</button>` : ""}</div>
+    <div class="section-title"><h2>What she has</h2>${owner() ? `<span class="title-links">${photoButton()}<button class="link" data-act="import-list">Import list</button></span>` : ""}</div>
     <div class="search">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
       <input type="search" id="closet-search" class="in" value="${esc(closetQuery)}" placeholder="Search her closet, like “mermaids”" aria-label="Search her closet by print, brand or style" autocomplete="off" enterkeyhint="search" />
@@ -368,6 +387,7 @@ function sizesView() {
   const bs = brands();
   return `
     <div class="note">Her current size in each brand. When shopping, get <b>this size or bigger</b>. She grows fast!</div>
+    ${plansSection()}
     <div class="section-title"><h2>Favorite brands</h2>${owner() ? `<button class="link" data-act="add-brand">+ Brand</button>` : ""}</div>
     ${bs.length
       ? bs.map((b) => `
@@ -440,6 +460,276 @@ function colorsSheet() {
         await store.setColors(clean);
         return "Colors saved";
       });
+    }
+  );
+}
+
+// ── sold-out checks (owner) ──────────────────────────────────────────
+// The server reads each wishlist link (10 per call, 8 calls a minute at most) and saves
+// "in" / "out" on the item. Runs by itself when the owner visits and the last check is
+// over 3 days old, or from "Check now".
+const STOCK_EVERY = 3 * 86400000, LOOKUP_CHUNK = 10;
+let stockProgress = "", autoStockDone = false;
+const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
+async function inChunks(ids, fn, label) {
+  let found = 0;
+  for (let i = 0; i < ids.length; i += LOOKUP_CHUNK) {
+    label(`${Math.min(i + LOOKUP_CHUNK, ids.length)} of ${ids.length}…`);
+    const part = ids.slice(i, i + LOOKUP_CHUNK);
+    for (let tries = 0; ; tries++) {
+      try { found += (await fn(part)).found || 0; break; }
+      catch (e) { if (e.status === 429 && tries < 3) { await sleepMs(10000); continue; } throw e; }
+    }
+  }
+  return found;
+}
+function maybeAutoStock() {
+  if (autoStockDone || !owner() || S.status !== "ok" || !S.data || isDemo) return;
+  autoStockDone = true;
+  const due = list(S.data.items).some((i) => i.url && (!i.stockAt || Date.now() - i.stockAt > STOCK_EVERY));
+  if (due) runStockCheck({ quiet: true });
+}
+async function runStockCheck({ quiet }) {
+  if (busy.has("stock")) return;
+  const ids = list(S.data.items).filter((i) => i.url && !isClaimed(i.id)).map((i) => i.id);
+  if (!ids.length) { if (!quiet) toast("No wishlist links to check"); return; }
+  busy.add("stock"); render();
+  try {
+    const out = await inChunks(ids, (part) => store.checkStock(part), (p) => { stockProgress = `Checking ${p}`; render(); });
+    if (!quiet || out) toast(out ? `${out} wishlist ${out === 1 ? "item looks" : "items look"} sold out` : "Everything's still in stock");
+  } catch (e) { if (!quiet) toast(e?.message || "Couldn't check right now."); }
+  finally { busy.delete("stock"); stockProgress = ""; render(); }
+}
+
+// ── find photos for closet prints (owner) ────────────────────────────
+let photoProgress = "";
+const photoTargets = () => list(S.data?.prints).filter((p) => p.url && !p.image);
+function photoButton() {
+  const n = photoTargets().length;
+  if (!n && !busy.has("photos")) return "";
+  return `<button class="link" data-act="find-photos" ${dis("photos")}>${busy.has("photos") ? photoProgress || "Finding…" : `Find photos (${n})`}</button>`;
+}
+async function runFindPhotos() {
+  if (busy.has("photos")) return;
+  const ids = photoTargets().map((p) => p.id);
+  if (!ids.length) return;
+  busy.add("photos"); render();
+  try {
+    const found = await inChunks(ids, (part) => store.findPhotos(part), (p) => { photoProgress = `Finding ${p}`; render(); });
+    const noLink = list(S.data.prints).filter((p) => !p.url && !p.image).length;
+    toast(`Found ${found} ${found === 1 ? "photo" : "photos"}.${noLink ? ` ${noLink} prints have no link: tap one to paste its product link.` : ""}`);
+  } catch (e) { toast(e?.message || "Couldn't find photos right now."); }
+  finally { busy.delete("photos"); photoProgress = ""; render(); }
+}
+
+// ── shopping ahead (occasion sizing) ─────────────────────────────────
+const PRESETS = { christmas: "Christmas", birthday: "Birthday", summer: "Next summer", fall: "Next fall" };
+const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function nextDate(month, day) {
+  const now = new Date(), d = new Date(now.getFullYear(), month - 1, day);
+  if (d < new Date(now.getFullYear(), now.getMonth(), now.getDate())) d.setFullYear(d.getFullYear() + 1);
+  return iso(d);
+}
+function presetPlan(key) {
+  const date = key === "christmas" ? nextDate(12, 25) : key === "summer" ? nextDate(6, 1) : key === "fall" ? nextDate(9, 1) : "";
+  return { id: newId(), name: PRESETS[key], date, note: "", rows: [], isNew: true };
+}
+const planDate = (p) => (p.date ? new Date(p.date + "T12:00:00") : null);
+function whenText(p) {
+  const d = planDate(p);
+  if (!d) return "";
+  const days = Math.round((d - new Date()) / 86400000);
+  const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(d.getFullYear() !== new Date().getFullYear() && { year: "numeric" }) });
+  const rel = days < 0 ? "passed" : days === 0 ? "today" : days < 14 ? `in ${days} days` : days < 70 ? `in ${Math.round(days / 7)} weeks` : `in ${Math.round(days / 30)} months`;
+  return `${label} · ${rel}`;
+}
+// Upcoming first (by date), then undated, then past.
+function sortedPlans() {
+  const t = Date.now() - 86400000;
+  const rank = (p) => { const d = planDate(p); return !d ? 1 : d.getTime() >= t ? 0 : 2; };
+  return [...(S.data?.plans || [])].sort((a, b) => rank(a) - rank(b) || (planDate(a)?.getTime() || 0) - (planDate(b)?.getTime() || 0));
+}
+function planPills(plan) {
+  const byBrand = new Map();
+  for (const r of plan.rows || []) { if (!byBrand.has(r.brand)) byBrand.set(r.brand, []); byBrand.get(r.brand).push(r); }
+  if (!byBrand.size) return `<p class="muted">${owner() ? "No sizes yet. Tap Edit to add some." : "Sizes coming soon."}</p>`;
+  return [...byBrand].map(([brand, rows]) => `
+    <div class="plan-brand"><strong>${esc(brand)}</strong>
+      <div class="plan-pills">${rows.map((r) => r.skip
+        ? `<span class="ppill skip">No more ${esc(r.style)}</span>`
+        : `<span class="ppill">${r.style ? `<b>${esc(r.style)}</b>` : "Anything"}${r.size ? ` · ${esc(r.size)}` : ""}</span>`).join("")}</div>
+    </div>`).join("");
+}
+function planCard(plan, { compact = false } = {}) {
+  return `<div class="plan-card">
+    <div class="plan-head"><div><h3>${esc(plan.name)}</h3>${plan.date ? `<span class="muted">${esc(whenText(plan))}</span>` : ""}</div>
+      ${owner() && !compact ? `<button class="link" data-act="edit-plan" data-id="${plan.id}">Edit</button>` : ""}</div>
+    ${plan.note ? `<p class="plan-note">${esc(plan.note)}</p>` : ""}
+    ${planPills(plan)}
+  </div>`;
+}
+function plansSection() {
+  const plans = sortedPlans();
+  if (!plans.length) {
+    return owner()
+      ? `<section class="plans"><div class="section-title"><h2>Shopping ahead</h2></div>
+         <p class="muted">Gifts for later need bigger sizes. Add an occasion and list the style and size per brand.</p>
+         <div class="filters">${Object.entries(PRESETS).map(([k, v]) => `<button class="filter" data-act="add-plan" data-preset="${k}">+ ${v}</button>`).join("")}</div></section>`
+      : "";
+  }
+  const sel = plans.find((p) => p.id === filter.plan) || plans[0];
+  return `<section class="plans">
+    <div class="section-title"><h2>Shopping ahead</h2>${owner() ? `<button class="link" data-act="add-plan">+ Occasion</button>` : ""}</div>
+    ${plans.length > 1 ? `<div class="filters" role="group" aria-label="Occasion">${plans.map((p) => `<button class="filter" data-act="pick-plan" data-id="${p.id}" aria-pressed="${p.id === sel.id}">${esc(p.name)}</button>`).join("")}</div>` : ""}
+    ${planCard(sel)}
+  </section>`;
+}
+function planSheet(existing) {
+  const plan = existing ? structuredClone(existing) : presetPlan("christmas");
+  if (!existing) { plan.name = ""; plan.date = ""; }
+  const isNew = !existing || existing.isNew;
+  let rows = (plan.rows || []).map((r) => ({ ...r }));
+  const styles = typesFor("clothes");
+  const brandList = () => brands().map((b) => `<option value="${esc(b.name)}">`).join("");
+  const rowHtml = (r, i) => `
+    <div class="plan-row${r.skip ? " is-skip" : ""}" data-i="${i}">
+      <input class="in" data-f="brand" list="dl-plan-brands" maxlength="60" value="${esc(r.brand)}" placeholder="Brand" aria-label="Brand" />
+      <select class="in" data-f="style" aria-label="Style"><option value="">Any style</option>${[...new Set([...(r.style ? [r.style] : []), ...styles])].map((s) => `<option ${s === r.style ? "selected" : ""}>${esc(s)}</option>`).join("")}</select>
+      <input class="in" data-f="size" list="dl-plan-sizes" maxlength="20" value="${esc(r.size)}" placeholder="Size" aria-label="Size" ${r.skip ? "disabled" : ""} />
+      <label class="skip-toggle"><input type="checkbox" data-f="skip" ${r.skip ? "checked" : ""}> Won't need</label>
+      <button class="icon-btn danger" data-m="remove" aria-label="Remove line">×</button>
+    </div>`;
+  openSheet(
+    `<h2>${isNew ? "Add occasion" : "Edit occasion"}</h2>
+     <label class="f" for="pl-name">Occasion</label>
+     <input class="in" id="pl-name" maxlength="30" list="dl-plan-names" value="${esc(plan.name)}" placeholder="Christmas" />
+     <datalist id="dl-plan-names">${Object.values(PRESETS).map((v) => `<option value="${v}">`).join("")}</datalist>
+     <label class="f" for="pl-date">Date (optional)</label>
+     <input class="in" id="pl-date" type="date" value="${esc(plan.date)}" />
+     <label class="f" for="pl-note">Note for gifters (optional)</label>
+     <input class="in" id="pl-note" maxlength="160" value="${esc(plan.note)}" placeholder="She'll be walking by then, soft shoes welcome!" />
+     <div class="label-row"><label class="f">Style and size by brand</label></div>
+     <p class="muted small">Tick <b>Won't need</b> for styles she'll have outgrown, like zippys.</p>
+     <div class="plan-rows"></div>
+     <button class="btn ghost small" data-m="add">+ Add line</button>
+     <datalist id="dl-plan-brands">${brandList()}</datalist>
+     <datalist id="dl-plan-sizes">${SIZES.map((x) => `<option value="${esc(x)}">`).join("")}</datalist>
+     <div class="err sheet-err" hidden></div>
+     <div class="sheet-actions">
+       ${isNew ? "" : `<button class="link danger" data-m="delete-plan">Delete</button>`}
+       <span class="spacer"></span>
+       <button class="btn ghost" data-act="cancel">Cancel</button>
+       <button class="btn" data-act="save">Save</button></div>`,
+    (el) => {
+      const wrap = el.querySelector(".plan-rows");
+      const draw = () => { wrap.innerHTML = rows.map(rowHtml).join("") || `<p class="muted">No lines yet.</p>`; };
+      draw();
+      wrap.addEventListener("input", (ev) => {
+        const rowEl = ev.target.closest(".plan-row"); if (!rowEl) return;
+        const r = rows[Number(rowEl.dataset.i)], f = ev.target.dataset.f;
+        if (f === "skip") { r.skip = ev.target.checked; if (r.skip) r.size = ""; draw(); }
+        else if (f) r[f] = ev.target.value;
+      });
+      wrap.addEventListener("change", (ev) => { if (ev.target.dataset.f === "style") rows[Number(ev.target.closest(".plan-row").dataset.i)].style = ev.target.value; });
+      wrap.addEventListener("click", (ev) => {
+        if (ev.target.closest('[data-m="remove"]')) { rows.splice(Number(ev.target.closest(".plan-row").dataset.i), 1); draw(); }
+      });
+      el.querySelector('[data-m="add"]').addEventListener("click", () => {
+        rows.push({ brand: rows.at(-1)?.brand || brands()[0]?.name || "", style: "", size: "", skip: false }); draw();
+        wrap.querySelector(".plan-row:last-child select")?.focus();
+      });
+      el.querySelector('[data-act="cancel"]').addEventListener("click", () => closeSheet());
+      el.querySelector('[data-m="delete-plan"]')?.addEventListener("click", async () => {
+        const ok = await confirmModal({ title: `Delete ${plan.name || "this occasion"}?`, message: "Its sizes will be removed for everyone.", confirmLabel: "Delete" });
+        if (!ok) return;
+        try { await store.deletePlan(plan.id); closeSheet(); toast("Deleted"); }
+        catch (e) { const er = el.querySelector(".sheet-err"); er.textContent = e.message; er.hidden = false; }
+      });
+      wireSave(el, async () => {
+        const name = el.querySelector("#pl-name").value.trim();
+        if (!name) throw new Error("Give the occasion a name.");
+        const clean = rows.map((r) => ({ brand: r.brand.trim(), style: r.style || "", size: r.skip ? "" : r.size.trim(), skip: !!r.skip }))
+          .filter((r) => r.brand || r.style || r.size);
+        for (const r of clean) {
+          if (!r.brand) throw new Error("Every line needs a brand.");
+          if (r.skip && !r.style) throw new Error(`Pick which style ${r.brand} won't need.`);
+          if (!r.skip && !r.style && !r.size) throw new Error(`Add a style or size for ${r.brand}.`);
+        }
+        await store.setPlan({ id: plan.id, name, date: el.querySelector("#pl-date").value || "", note: el.querySelector("#pl-note").value.trim(), rows: clean });
+        filter.plan = plan.id;
+        return "Saved";
+      });
+    }
+  );
+}
+
+// ── gift ideas ───────────────────────────────────────────────────────
+function ideasView() {
+  const items = list(S.data.items).filter((i) => !isClaimed(i.id));
+  const ranked = [...items].sort((a, b) => (a.stock === "out") - (b.stock === "out") || (a.priority === "most" ? 0 : 1) - (b.priority === "most" ? 0 : 1));
+  const prints = list(S.data.prints);
+  const favs = prints.filter((p) => p.favorite);
+  const lovedOutgrown = favs.filter((p) => p.outgrown);
+  const lovedNow = favs.filter((p) => !p.outgrown);
+  const favStyles = S.data.favoriteStyles || [];
+  const lc = (x) => (x || "").toLowerCase();
+  const nextPlan = sortedPlans().find((p) => (p.rows || []).length && (!p.date || planDate(p).getTime() >= Date.now() - 86400000));
+  const sections = [];
+
+  if (nextPlan) sections.push(`
+    <section class="idea"><div class="section-title"><h2>Shopping for ${esc(nextPlan.name)}?</h2><button class="link" data-act="go-tab" data-to="sizes">All occasions</button></div>
+      <p class="muted">She'll have grown by then. Here's what to look for.</p>${planCard(nextPlan, { compact: true })}</section>`);
+
+  if (ranked.length) sections.push(`
+    <section class="idea"><div class="section-title"><h2>On her wishlist</h2><button class="link" data-act="go-tab" data-to="wishlist">See all ${items.length}</button></div>
+      <div class="mini-list">${ranked.slice(0, 6).map((i) => `
+        <button class="mini" data-act="go-tab" data-to="wishlist">${img(i.image, "mini-img", i.title)}
+          <span><b>${esc(i.title)}</b><small>${esc([i.brand, i.size].filter(Boolean).join(" · "))}${i.stock === "out" ? ` · <em class="warn-text">sold out online</em>` : ""}</small></span></button>`).join("")}</div></section>`);
+
+  if (lovedOutgrown.length) sections.push(`
+    <section class="idea"><div class="section-title"><h2>Loved it, outgrew it</h2></div>
+      <p class="muted">Favorite prints she's outgrown. Any style in a bigger size is perfect.</p>
+      <div class="grid">${lovedOutgrown.map((p) => tile({ ...p, outgrown: false, id: p.id }, "edit-print", p.printName, [], p.brand)).join("")}</div></section>`);
+
+  if (lovedNow.length) sections.push(`
+    <section class="idea"><div class="section-title"><h2>Favorite prints, new styles</h2></div>
+      <p class="muted">She loves these prints. Any style she doesn't have yet is welcome.</p>
+      <div class="idea-rows">${lovedNow.map((p) => {
+        const has = p.types || [];
+        const wants = favStyles.filter((s) => !has.some((h) => lc(h) === lc(s)));
+        return `<div class="idea-row">${img(p.image, "mini-img", p.printName)}<div><b>${esc(p.printName)}</b> <span class="muted">· ${esc(p.brand || "")}</span>
+          <div class="small">${has.length ? `Has: ${esc(has.join(", "))}.` : ""} ${wants.length ? `<span class="love">Would love: ${esc(wants.join(", "))}</span>` : "Try any other style!"}</div></div></div>`;
+      }).join("")}</div></section>`);
+
+  if (favStyles.length) sections.push(`
+    <section class="idea"><div class="section-title"><h2>Favorite styles, new prints</h2></div>
+      <div class="idea-rows">${favStyles.map((st) => {
+        const n = prints.filter((p) => !p.outgrown && (p.types || []).some((t) => lc(t) === lc(st))).length;
+        return `<div class="idea-row"><span class="fav-style">${esc(st)}</span><div class="small">Any print she doesn't have yet.${n ? ` She has ${n} that fit now, so search her closet first.` : ""}</div></div>`;
+      }).join("")}</div></section>`);
+
+  return `
+    <div class="note">Not sure what to get? Start here. Before buying a print, <button class="link inline" data-act="go-tab" data-to="closet" data-focus="closet-search">search her closet</button> to make sure she doesn't have it.</div>
+    ${sections.join("") || `<div class="empty">Gift ideas will show up here once there's a wishlist or some favorites.</div>`}`;
+}
+
+// ── share ────────────────────────────────────────────────────────────
+const SITE_URL = "https://alyssamanse.github.io/MerrittsCloset/";
+function shareSheet() {
+  openSheet(
+    `<h2>Share ${esc(CONFIG.babyName)}'s Closet</h2>
+     <p class="muted">Anyone with the link can see the list and claim gifts. They can't change anything else.</p>
+     <div class="share-link"><input class="in" id="share-url" readonly value="${SITE_URL}" aria-label="Link" /><button class="btn small" data-m="copy">Copy</button></div>
+     ${navigator.share ? `<button class="btn ghost" data-m="native">Share…</button>` : ""}
+     <div class="qr"><img src="qr.png" alt="QR code for ${esc(CONFIG.babyName)}'s Closet" width="220" height="220" /><a class="link" href="qr.png" download="merritts-closet-qr.png">Save QR code</a></div>
+     <div class="sheet-actions"><span class="spacer"></span><button class="btn ghost" data-act="cancel">Done</button></div>`,
+    (el) => {
+      el.querySelector('[data-act="cancel"]').addEventListener("click", () => closeSheet());
+      el.querySelector('[data-m="copy"]').addEventListener("click", async (ev) => {
+        try { await navigator.clipboard.writeText(SITE_URL); ev.target.textContent = "Copied"; }
+        catch { const i = el.querySelector("#share-url"); i.focus(); i.select(); }
+      });
+      el.querySelector('[data-m="native"]')?.addEventListener("click", () => navigator.share({ title: `${CONFIG.babyName}'s Closet`, text: `${CONFIG.babyName}'s wishlist and closet`, url: SITE_URL }).catch(() => {}));
     }
   );
 }
@@ -940,6 +1230,14 @@ $app.addEventListener("click", (ev) => {
     case "add-brand": return brandSheet();
     case "import-list": return importSheet();
     case "edit-colors": return colorsSheet();
+    case "check-stock": return runStockCheck({ quiet: false });
+    case "find-photos": return runFindPhotos();
+    case "add-plan": return planSheet(t.dataset.preset ? presetPlan(t.dataset.preset) : null);
+    case "edit-plan": return planSheet((S.data.plans || []).find((p) => p.id === id));
+    case "pick-plan": filter.plan = id; return render();
+    case "go-tab": tab = t.dataset.to; history.replaceState(null, "", `${location.search}#${tab}`); render(); window.scrollTo({ top: 0 });
+      if (t.dataset.focus) document.getElementById(t.dataset.focus)?.focus(); return;
+    case "share": return shareSheet();
     case "edit-favstyles": return favStylesSheet();
     case "edit-brand": return brandSheet(S.data.brands[id]);
     case "refresh": return act("refresh", async () => { if (!(await store.refresh())) toast("Already up to date"); });
@@ -964,5 +1262,5 @@ render();
     render();
     return;
   }
-  store.start((next) => { S = next; render(); });
+  store.start((next) => { S = next; render(); maybeAutoStock(); });
 })();

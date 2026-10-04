@@ -152,6 +152,7 @@ export async function createFirebaseStore() {
         if (retryable && n < MAX_RETRIES && (!wait || wait <= 8000)) { await sleep(wait || backoff(n)); continue; }
         const err = new FriendlyError(body.error || "That didn't work. Try again in a minute.");
         err.status = res.status;
+        if (wait) err.retryAfter = wait / 1000;
         throw err;
       }
     })().finally(() => inflight.delete(dedupeKey));
@@ -213,6 +214,10 @@ export async function createFirebaseStore() {
     deleteType: (category, name) => mutate("deleteType", { category, name }),
     importBatch: (prints, toys) => mutate("importBatch", { prints, toys }),
     setColors: (colors) => mutate("setColors", { colors }),
+    setPlan: (plan) => mutate("setPlan", { plan }),
+    deletePlan: (id) => mutate("deletePlan", { id }),
+    findPhotos: (ids) => mutate("findPhotos", { ids }),
+    checkStock: (ids) => mutate("checkStock", { ids }),
     upsertBrand: (brand) => mutate("upsertBrand", { brand }),
     deleteBrand: (id) => mutate("deleteBrand", { id }),
     async importLink(url) { return (await call("import", { url })).product; },
@@ -237,8 +242,8 @@ export function createDemoStore() {
       b3: { id: "b3", name: "Posh Peanut", currentSize: "9–12M", notes: "Runs small, size up" },
     },
     items: {
-      i1: { id: "i1", title: "Zippered Footie", printName: "Strawberry Patch", type: "Footie", brand: "Kyte Baby", size: "12–18M", price: "$38", priority: "most", image: img("#F3D3CF", "#C9787A"), url: "", sizeFlexible: true, createdAt: now },
-      i2: { id: "i2", title: "Bamboo Two-Piece Set", printName: "Woodland Friends", type: "Two-piece PJs", brand: "Little Sleepies", size: "12–18M", price: "$36", priority: "nice", image: img("#E5E6D2", "#8E9A6F"), url: "", printFlexible: true, createdAt: now },
+      i1: { id: "i1", url: "https://example.com/products/strawberry-footie", title: "Zippered Footie", printName: "Strawberry Patch", type: "Footie", brand: "Kyte Baby", size: "12–18M", price: "$38", priority: "most", image: img("#F3D3CF", "#C9787A"), sizeFlexible: true, createdAt: now },
+      i2: { id: "i2", url: "https://example.com/products/woodland-set", title: "Bamboo Two-Piece Set", printName: "Woodland Friends", type: "Two-piece PJs", brand: "Little Sleepies", size: "12–18M", price: "$36", priority: "nice", image: img("#E5E6D2", "#8E9A6F"), printFlexible: true, createdAt: now },
       i4: { id: "i4", category: "toy", title: "Silicone Stacking Cups", brand: "Mushie", type: "Stacker", ageRange: "6m+", price: "$16", priority: "most", image: img("#E8EBDA", "#A7B8A0"), url: "", createdAt: now },
       i5: { id: "i5", category: "toy", title: "Board Book Set", brand: "Usborne", type: "Book", ageRange: "0–2y", price: "$24", priority: "nice", image: img("#F6DCD8", "#C48E93"), url: "", createdAt: now },
       i6: { id: "i6", category: "other", title: "Knit Stroller Blanket", brand: "Quincy Mae", type: "Blanket", price: "$58", priority: "nice", image: img("#EBD6D3", "#D4AEAA"), url: "", createdAt: now },
@@ -258,6 +263,12 @@ export function createDemoStore() {
       t3: { id: "t3", name: "Bunny Lovey", brand: "Jellycat", type: "Plush", image: img("#F8E3E1", "#FFFFFF") },
     },
     favoriteStyles: ["Zippy", "Two-piece PJs"],
+    plans: [{ id: "plan_demo_xmas", name: "Christmas", date: "2026-12-25", note: "She'll be crawling everywhere by then!", rows: [
+      { brand: "Little Sleepies", style: "Two-piece PJs", size: "12–18M", skip: false },
+      { brand: "Little Sleepies", style: "Dress", size: "18–24M", skip: false },
+      { brand: "Little Sleepies", style: "Zippy", size: "", skip: true },
+      { brand: "Kyte Baby", style: "", size: "12–18M", skip: false },
+    ] }],
     claims: { i2: { h: "someone-else", at: now } },
   };
   const mine = new Set(["i3"]);
@@ -336,6 +347,18 @@ export function createDemoStore() {
       }
     }),
     setColors: m((colors) => { data.colors = colors; }),
+    setPlan: m((plan) => { data.plans = [...(data.plans || []).filter((p) => p.id !== plan.id), plan]; }),
+    deletePlan: m((id) => { data.plans = (data.plans || []).filter((p) => p.id !== id); }),
+    async findPhotos(ids) {
+      await delay(); let found = 0;
+      for (const id of ids) { const p = data.prints[id]; if (p && !p.image) { p.image = img("#EBD6D3", "#FFFFFF"); found++; } }
+      emit(); return { found };
+    },
+    async checkStock(ids) {
+      await delay(); let found = 0;
+      for (const id of ids) { const it = data.items[id]; if (it) { it.stock = it.id === "i1" ? "out" : "in"; it.stockAt = Date.now(); if (it.stock === "out") found++; } }
+      emit(); return { found };
+    },
     upsertBrand: m((b) => { data.brands[b.id] = b; }),
     deleteBrand: m((id) => { delete data.brands[id]; }),
     async importLink(url) {
