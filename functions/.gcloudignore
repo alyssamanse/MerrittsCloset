@@ -1,0 +1,4 @@
+# Only the server code goes to Cloud Run.
+.gcloudignore
+node_modules/
+test/

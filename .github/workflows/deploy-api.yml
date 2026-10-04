@@ -1,0 +1,52 @@
+# Deploys the closet-api Cloud Run function whenever the server code in functions/ changes.
+# Signs in to Google Cloud with Workload Identity Federation: no keys or passwords are stored.
+# Google only accepts this repo's main branch (see the provider's attribute condition).
+name: Deploy API
+
+on:
+  # Automatic deploys on push are switched on once Google Cloud sign-in is set up.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write   # lets the job ask GitHub for a short-lived token that Google can verify
+
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+jobs:
+  test-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run the API tests
+        working-directory: functions
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund
+          node --test test/api.test.js test/importer.test.js
+
+      - name: Sign in to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/767635696368/locations/global/workloadIdentityPools/github/providers/merrittscloset
+          service_account: github-deployer@merrittscloset-4d74f.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy closet-api
+        # Settings not listed here (env vars, max instances, memory) stay as they are.
+        run: |
+          gcloud run deploy closet-api \
+            --source functions \
+            --function api \
+            --base-image nodejs22 \
+            --region us-central1 \
+            --project merrittscloset-4d74f \
+            --quiet
