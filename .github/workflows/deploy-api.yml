@@ -32,7 +32,7 @@ jobs:
         working-directory: functions
         run: |
           npm install --ignore-scripts --no-audit --no-fund
-          node --test test/api.test.js test/importer.test.js
+          node --test test/api.test.js test/importer.test.js test/private.test.js
 
       - name: Sign in to Google Cloud
         uses: google-github-actions/auth@v2

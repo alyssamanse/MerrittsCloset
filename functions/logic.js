@@ -5,6 +5,7 @@ const crypto = require("crypto");
 
 const LIMITS = {
   items: 150, prints: 400, brands: 40, toys: 200, family: 150, styleFavs: 60, // hard caps on stored records
+  trashMs: 7 * 86400000,                // bulk-deleted prints can be restored for a week
   docBytes: 800_000,                     // Firestore's own limit is ~1 MiB
   activeClaimsPerKey: 15,                // one browser can't claim the whole list
   claimCooldownMs: 3_000,                // an item's claim can't flip faster than this
@@ -165,7 +166,7 @@ const brandKey = (name) => {
 // Every action changes at most one document. Repeating an action is a no-op
 // (changed: false → no write), which makes client retries safe.
 const GUEST_ACTIONS = new Set(["claim", "unclaim"]);
-const OWNER_ACTIONS = new Set(["init", "setVisibility", "upsertBrand", "deleteBrand", "upsertItem", "deleteItem", "receive", "upsertPrint", "deletePrint", "upsertToy", "deleteToy", "setFavoriteStyles", "addType", "renameType", "deleteType", "resetClaim", "importBatch", "setColors", "setImages", "setPlan", "deletePlan", "setStock", "upsertFamilyItem", "deleteFamilyItem", "upsertStyleFav", "deleteStyleFav", "bulkCloset"]);
+const OWNER_ACTIONS = new Set(["init", "setVisibility", "upsertBrand", "deleteBrand", "upsertItem", "deleteItem", "receive", "upsertPrint", "deletePrint", "upsertToy", "deleteToy", "setFavoriteStyles", "addType", "renameType", "deleteType", "resetClaim", "importBatch", "setColors", "setImages", "setPlan", "deletePlan", "setStock", "upsertFamilyItem", "deleteFamilyItem", "upsertStyleFav", "deleteStyleFav", "bulkCloset", "undoBulkDelete", "confirmSizes"]);
 
 function reduce(prev, action, payload, { isOwner, now }) {
   if (!GUEST_ACTIONS.has(action) && !OWNER_ACTIONS.has(action)) bad("Unknown action");
@@ -176,6 +177,8 @@ function reduce(prev, action, payload, { isOwner, now }) {
   }
   const state = structuredClone(prev);
   for (const k of ["brands", "items", "prints", "toys", "claims", "family", "styleFavs"]) state[k] = state[k] || {};
+  if (state.trash && now - (state.trash.at || 0) > LIMITS.trashMs) delete state.trash;
+  for (const b of Object.values(state.brands)) if (!b.sizeAt) b.sizeAt = now;
   const p = payload || {};
   const same = { state: prev, changed: false };
 
@@ -193,7 +196,9 @@ function reduce(prev, action, payload, { isOwner, now }) {
 
     case "claim":
     case "unclaim": {
-      onlyKeys(p, ["itemId", "key"], "payload");
+      onlyKeys(p, ["itemId", "key", "from"], "payload");
+      if (action === "claim") str(p.from, "Name", 40);                   // optional; never stored in this public document
+      else if (p.from !== undefined) bad('Unexpected field "from"');
       const itemId = id(p.itemId, "itemId");
       if (typeof p.key !== "string" || !KEY_RE.test(p.key)) bad("Invalid claim key");
       if (!state.items[itemId] && !state.family[itemId]) throw new ApiError(404, "That item isn't on the list anymore.");
@@ -231,17 +236,37 @@ function reduce(prev, action, payload, { isOwner, now }) {
       if (!ops.includes(p.op)) bad("Unknown bulk change");
       if (!Array.isArray(p.ids) || !p.ids.length || p.ids.length > MAX_BULK) bad(`Select 1 to ${MAX_BULK} at a time`);
       const before = JSON.stringify(state[p.kind]);
+      const removed = {};
       for (const raw of p.ids) {
         const rid = id(raw);
         const rec = state[p.kind][rid];
         if (!rec) continue;
-        if (p.op === "delete") delete state[p.kind][rid];
+        if (p.op === "delete") { removed[rid] = rec; delete state[p.kind][rid]; }
         else if (p.op === "favorite") rec.favorite = true;
         else if (p.op === "unfavorite") rec.favorite = false;
         else if (p.op === "outgrown") rec.outgrown = true;
         else if (p.op === "fits") rec.outgrown = false;
       }
       if (JSON.stringify(state[p.kind]) === before) return same;
+      if (p.op === "delete") {
+        // Replaces any earlier batch, except one from the same select-and-delete (sent in chunks of 200).
+        const t = state.trash;
+        const merge = t && t.kind === p.kind && now - t.at < 60000 ? t.records : {};
+        state.trash = { kind: p.kind, at: now, records: { ...merge, ...removed } };
+      }
+      break;
+    }
+    case "undoBulkDelete": {
+      onlyKeys(p, [], "payload");
+      const t = state.trash;
+      if (!t || !t.records) return same;
+      const max = LIMITS[t.kind];
+      for (const [rid, rec] of Object.entries(t.records)) {
+        if (state[t.kind][rid]) continue;
+        if (Object.keys(state[t.kind]).length >= max) break;
+        state[t.kind][rid] = rec;
+      }
+      delete state.trash;
       break;
     }
 
@@ -283,9 +308,18 @@ function reduce(prev, action, payload, { isOwner, now }) {
     case "upsertBrand": {
       onlyKeys(p, ["brand"], "payload");
       const b = cleanBrand(p.brand);
-      if (!state.brands[b.id] && Object.keys(state.brands).length >= LIMITS.brands) bad(`You can have up to ${LIMITS.brands} brands`);
-      if (JSON.stringify(state.brands[b.id]) === JSON.stringify(b)) return same;
-      state.brands[b.id] = b;
+      const cur = state.brands[b.id];
+      if (!cur && Object.keys(state.brands).length >= LIMITS.brands) bad(`You can have up to ${LIMITS.brands} brands`);
+      // sizeAt = when her size in this brand last changed (drives the "still right?" reminder).
+      const next = { ...b, sizeAt: cur && cur.currentSize === b.currentSize ? cur.sizeAt ?? now : now };
+      if (JSON.stringify(cur) === JSON.stringify(next)) return same;
+      state.brands[b.id] = next;
+      break;
+    }
+    case "confirmSizes": {
+      // "All still right": restart every brand's reminder clock.
+      onlyKeys(p, [], "payload");
+      for (const b of Object.values(state.brands)) b.sizeAt = now;
       break;
     }
     case "deleteBrand": {
@@ -577,7 +611,7 @@ function reduce(prev, action, payload, { isOwner, now }) {
 }
 
 // What readers get back from the API. Matches what the Firestore document holds.
-const publicView = (s) => s && { v: s.v, visibility: s.visibility, brands: s.brands, items: s.items, prints: s.prints, toys: s.toys || {}, claims: s.claims, favoriteStyles: s.favoriteStyles || [], typeLists: s.typeLists || {}, ...(s.colors && { colors: s.colors }), plans: s.plans || [], family: s.family || {}, styleFavs: s.styleFavs || {} };
+const publicView = (s) => s && { v: s.v, visibility: s.visibility, brands: s.brands, items: s.items, prints: s.prints, toys: s.toys || {}, claims: s.claims, favoriteStyles: s.favoriteStyles || [], typeLists: s.typeLists || {}, ...(s.colors && { colors: s.colors }), plans: s.plans || [], family: s.family || {}, styleFavs: s.styleFavs || {}, ...(s.trash && { trash: { kind: s.trash.kind, at: s.trash.at, count: Object.keys(s.trash.records || {}).length } }) };
 
 // ── rate limiting (in memory) ───────────────────────────────────────
 // Token buckets. The function runs with max instances = 1, so one process
@@ -596,6 +630,58 @@ class Limiter {
   }
 }
 
+
+// ── owner-only private document ─────────────────────────────────────
+// wishlists/{id}/private/owner — clients can never read it (rules deny all
+// subcollections); only this API does, and only returns it to the owner.
+//   givers: { [itemId]: { from, at } }      name a gifter typed when claiming
+//   thanks: { [id]: { id, title, from, at, done } }  thank-you checklist
+const PRIVATE_ACTIONS = new Set(["getPrivate", "setThank", "deleteThank", "addThank"]);
+const MAX_THANKS = 200;
+const emptyPrivate = () => ({ givers: {}, thanks: {} });
+function reducePrivate(prevPriv, action, payload, { prevPublic, nextPublic, publicChanged, isOwner, now, newId }) {
+  const priv = structuredClone(prevPriv || emptyPrivate());
+  priv.givers = priv.givers || {}; priv.thanks = priv.thanks || {};
+  const p = payload || {};
+  const before = JSON.stringify(priv);
+  const addThank = (title, from, itemId = "") => {
+    const ids = Object.values(priv.thanks).sort((a, b) => a.at - b.at);
+    while (ids.length >= MAX_THANKS) { const old = ids.find((t) => t.done) || ids[0]; delete priv.thanks[old.id]; ids.splice(ids.indexOf(old), 1); }
+    const tid = newId();
+    priv.thanks[tid] = { id: tid, itemId, title: String(title || "").slice(0, 120), from: String(from || "").slice(0, 40), at: now, done: false };
+  };
+  if (PRIVATE_ACTIONS.has(action)) {
+    if (!isOwner) throw new ApiError(403, "Only the owner can do that.");
+    if (action === "setThank") {
+      onlyKeys(p, ["id", "done"], "payload");
+      const t = priv.thanks[id(p.id)];
+      if (!t) throw new ApiError(404, "That thank-you isn't on the list anymore.");
+      t.done = bool(p.done, "done");
+    } else if (action === "deleteThank") {
+      onlyKeys(p, ["id"], "payload");
+      delete priv.thanks[id(p.id)];
+    } else if (action === "addThank") {
+      onlyKeys(p, ["title", "from"], "payload");
+      addThank(str(p.title, "Gift", 120, { required: true }), str(p.from, "From", 40, { required: true }));
+    }
+  } else if (publicChanged) {
+    const iid = p.itemId || p.id;
+    if (action === "claim") {
+      const from = str(p.from, "Name", 40);
+      if (from) priv.givers[iid] = { from, at: now }; else delete priv.givers[iid];
+    } else if (action === "unclaim" || action === "resetClaim" || action === "deleteItem") {
+      delete priv.givers[iid];
+    } else if (action === "receive" || action === "deleteFamilyItem") {
+      // Gift arrived (or a family wish marked "Got it"): the name moves to the thank-you list.
+      const g = priv.givers[iid];
+      const rec = prevPublic?.items?.[iid] || prevPublic?.family?.[iid];
+      if (g) addThank(rec?.title || "A gift", g.from, iid);
+      delete priv.givers[iid];
+    }
+  }
+  return { priv, changed: JSON.stringify(priv) !== before };
+}
+
 const RATES = {
   perIp: 30,          // any request, per client IP
   guestWrites: 30,    // claim/unclaim across ALL visitors combined
@@ -604,4 +690,4 @@ const RATES = {
   lookups: 8,         // Find photos / Check stock calls (each reads up to 10 store pages)
 };
 
-module.exports = { brandKey, MAX_STOCK_RESULTS, DEFAULT_TYPES, reduce, publicView, Limiter, RATES, LIMITS, ApiError, claimHash, GUEST_ACTIONS, OWNER_ACTIONS };
+module.exports = { reducePrivate, PRIVATE_ACTIONS, emptyPrivate, brandKey, MAX_STOCK_RESULTS, DEFAULT_TYPES, reduce, publicView, Limiter, RATES, LIMITS, ApiError, claimHash, GUEST_ACTIONS, OWNER_ACTIONS };

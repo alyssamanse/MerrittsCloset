@@ -10,7 +10,7 @@
 //   • Retries are capped (2) with backoff, only for transient errors, and every
 //     change is idempotent on the server, so a retry can't double a write.
 //   • Identical in-flight requests are merged (double taps send one request).
-import { CONFIG } from "./config.js?v=1005-0241";
+import { CONFIG } from "./config.js?v=1005-0753";
 
 const SDK = "https://www.gstatic.com/firebasejs/11.0.2";
 const CACHE_KEY = `closet:${CONFIG.wishlistId}`;
@@ -93,6 +93,12 @@ export async function createFirebaseStore() {
     mutate("init", {}).catch((e) => emit({ status: "setup-error", setupError: e.message }));
   }
 
+  // Owner only: gifter names and the thank-you list live in a private document
+  // that only the API can read (never cached on the device).
+  function loadPrivate() {
+    call("getPrivate", {}).then((b) => emit({ private: b.private })).catch((e) => console.warn(e.message));
+  }
+
   // One document read, with at most MAX_RETRIES retries for transient errors.
   function load({ force = false } = {}) {
     if (loading) return loading;
@@ -163,6 +169,7 @@ export async function createFirebaseStore() {
   async function mutate(action, payload) {
     try {
       const body = await call(action, payload);
+      if (body.private) emit({ private: body.private }); // owner only: gifter names + thank-yous
       if (body.data !== undefined) await setData(body.data);
       return body;
     } catch (e) {
@@ -178,8 +185,9 @@ export async function createFirebaseStore() {
       notify = onChange;
       fa.getRedirectResult(auth).catch(() => {});
       fa.onAuthStateChanged(auth, (u) => {
-        emit({ user: u ? { isOwner: isOwnerUser(u), email: u.email } : null });
+        emit({ user: u ? { isOwner: isOwnerUser(u), email: u.email } : null, ...(!isOwnerUser(u) && { private: null }) });
         if (isOwnerUser(u) && !state.data && state.status !== "loading") ownerSetup();
+        if (isOwnerUser(u)) loadPrivate();
       });
       load().catch((e) => console.warn(e.message));
       document.addEventListener("visibilitychange", () => {
@@ -198,7 +206,7 @@ export async function createFirebaseStore() {
     },
     signOut: () => fa.signOut(auth),
 
-    claim: (itemId) => mutate("claim", { itemId, key: claimKey() }),
+    claim: (itemId, from = "") => mutate("claim", { itemId, key: claimKey(), ...(from && { from }) }),
     unclaim: (itemId) => mutate("unclaim", { itemId, key: claimKey() }),
     resetClaim: (itemId) => mutate("resetClaim", { itemId }),
     upsertItem: (item) => mutate("upsertItem", { item }),
@@ -220,6 +228,11 @@ export async function createFirebaseStore() {
     deleteStyleFav: (id) => mutate("deleteStyleFav", { id }),
     bulkCloset: (kind, ids, op) => mutate("bulkCloset", { kind, ids, op }),
     deleteFamilyItem: (id) => mutate("deleteFamilyItem", { id }),
+    undoBulkDelete: () => mutate("undoBulkDelete", {}),
+    confirmSizes: () => mutate("confirmSizes", {}),
+    setThank: (id, done) => mutate("setThank", { id, done }),
+    deleteThank: (id) => mutate("deleteThank", { id }),
+    addThank: (title, from) => mutate("addThank", { title, from }),
     deletePlan: (id) => mutate("deletePlan", { id }),
     findPhotos: (ids) => mutate("findPhotos", { ids }),
     checkStock: (ids) => mutate("checkStock", { ids }),
@@ -256,6 +269,7 @@ export function createDemoStore() {
     },
     prints: {
       p1: { id: "p1", brand: "Kyte Baby", printName: "Cloud", types: ["Zippy", "Swaddle"], image: img("#F1ECE6", "#B9A99B") },
+      p6: { id: "p6", brand: "Kyte Baby", printName: "Strawberry Patch", types: ["Zippy"], image: img("#F3D3CF", "#C9787A") },
       p2: { id: "p2", brand: "Kyte Baby", printName: "Blush", types: ["Footie"], outgrown: true, image: img("#F4D6D3", "#E8B7B3") },
       p3: { id: "p3", brand: "Little Sleepies", printName: "Bunny Meadow", types: ["Zippy"], favorite: true, image: img("#E3E6D3", "#FFFFFF") },
       p4: { id: "p4", brand: "Posh Peanut", printName: "Honey Bears", types: ["Romper", "Bow"], image: img("#EADFD3", "#B9A58C") },
@@ -296,7 +310,12 @@ export function createDemoStore() {
   data.claims.i3 = { h: "mine", at: now };
   let user = null;
   let notify = () => {};
-  const emit = () => notify({ data: structuredClone(data), user, mine: new Set(mine), status: "ok" });
+  // Owner-only private data (gifter names, thank-yous), like the server's private document.
+  const priv = { givers: { i3: { from: "Aunt Jen", at: now } }, thanks: { th1: { id: "th1", itemId: "", title: "Wooden Rattle", from: "Grandma Sue", at: now - 86400000 * 3, done: false } } };
+  const addThank = (title, from) => { const tid = `th${Math.random().toString(36).slice(2, 8)}`; priv.thanks[tid] = { id: tid, itemId: "", title, from, at: Date.now(), done: false }; };
+  for (const b of Object.values(data.brands)) b.sizeAt = now;
+  const firstBrand = Object.values(data.brands)[0]; if (firstBrand) firstBrand.sizeAt = now - 86400000 * 75; // shows the reminder
+  const emit = () => notify({ data: structuredClone(data), user, mine: new Set(mine), status: "ok", private: user?.isOwner ? structuredClone(priv) : null });
   const delay = () => new Promise((r) => setTimeout(r, 250));
   const m = (fn) => async (...a) => { await delay(); fn(...a); emit(); };
   return {
@@ -305,13 +324,14 @@ export function createDemoStore() {
     refresh: async () => true,
     signInOwner: m(() => { user = { isOwner: true, email: CONFIG.ownerEmail }; }),
     signOut: m(() => { user = null; }),
-    claim: m((id) => { if (data.claims[id]?.h) throw new FriendlyError("Someone already claimed this one."); data.claims[id] = { h: "mine", at: Date.now() }; mine.add(id); }),
-    unclaim: m((id) => { data.claims[id] = { h: null, at: Date.now() }; mine.delete(id); }),
-    resetClaim: m((id) => { data.claims[id] = { h: null, at: Date.now() }; mine.delete(id); }),
+    claim: m((id, from = "") => { if (data.claims[id]?.h) throw new FriendlyError("Someone already claimed this one."); data.claims[id] = { h: "mine", at: Date.now() }; mine.add(id); if (from) priv.givers[id] = { from, at: Date.now() }; }),
+    unclaim: m((id) => { data.claims[id] = { h: null, at: Date.now() }; mine.delete(id); delete priv.givers[id]; }),
+    resetClaim: m((id) => { data.claims[id] = { h: null, at: Date.now() }; mine.delete(id); delete priv.givers[id]; }),
     upsertItem: m((it) => { data.items[it.id] = { ...it, createdAt: data.items[it.id]?.createdAt ?? Date.now() }; }),
-    deleteItem: m((id) => { delete data.items[id]; delete data.claims[id]; }),
+    deleteItem: m((id) => { delete data.items[id]; delete data.claims[id]; delete priv.givers[id]; }),
     receive: m((id) => {
       const it = data.items[id]; if (!it) return;
+      if (priv.givers[id]) { addThank(it.title, priv.givers[id].from); delete priv.givers[id]; }
       if (it.category === "toy" || it.category === "other") {
         if (!Object.values(data.toys).some((t) => (t.category || "toy") === it.category && t.name.toLowerCase() === it.title.toLowerCase() && (t.brand || "").toLowerCase() === (it.brand || "").toLowerCase()))
           data.toys[`r_${id}`] = { id: `r_${id}`, category: it.category, name: it.title, brand: it.brand, type: it.type, image: it.image, url: it.url };
@@ -355,9 +375,10 @@ export function createDemoStore() {
     }),
     setColors: m((colors) => { data.colors = colors; }),
     bulkCloset: m((kind, ids, op) => {
+      const removed = {};
       for (const x of ids) {
         const r = data[kind][x]; if (!r) continue;
-        if (op === "delete") delete data[kind][x];
+        if (op === "delete") { removed[x] = r; delete data[kind][x]; data.trash = { kind, at: Date.now(), records: removed }; }
         else if (op === "favorite") r.favorite = true; else if (op === "unfavorite") r.favorite = false;
         else if (op === "outgrown") r.outgrown = true; else if (op === "fits") r.outgrown = false;
       }
@@ -365,7 +386,12 @@ export function createDemoStore() {
     upsertStyleFav: m((f) => { data.styleFavs = data.styleFavs || {}; data.styleFavs[f.id] = { ...f, createdAt: data.styleFavs[f.id]?.createdAt ?? Date.now() }; }),
     deleteStyleFav: m((id) => { delete data.styleFavs?.[id]; }),
     upsertFamilyItem: m((it) => { data.family = data.family || {}; data.family[it.id] = { ...it, createdAt: data.family[it.id]?.createdAt ?? Date.now() }; }),
-    deleteFamilyItem: m((id) => { delete data.family[id]; delete data.claims[id]; mine.delete(id); }),
+    deleteFamilyItem: m((id) => { if (priv.givers[id]) { addThank(data.family[id]?.title || "A gift", priv.givers[id].from); delete priv.givers[id]; } delete data.family[id]; delete data.claims[id]; mine.delete(id); }),
+    undoBulkDelete: m(() => { const t = data.trash; if (!t) return; for (const [k, r] of Object.entries(t.records)) if (!data[t.kind][k]) data[t.kind][k] = r; delete data.trash; }),
+    confirmSizes: m(() => { for (const b of Object.values(data.brands)) b.sizeAt = Date.now(); }),
+    setThank: m((id, done) => { if (priv.thanks[id]) priv.thanks[id].done = done; }),
+    deleteThank: m((id) => { delete priv.thanks[id]; }),
+    addThank: m((title, from) => addThank(title, from)),
     setPlan: m((plan) => { data.plans = [...(data.plans || []).filter((p) => p.id !== plan.id), plan]; }),
     deletePlan: m((id) => { data.plans = (data.plans || []).filter((p) => p.id !== id); }),
     async findPhotos(ids) {
@@ -378,7 +404,7 @@ export function createDemoStore() {
       for (const id of ids) { const it = data.items[id]; if (it) { it.stock = it.id === "i1" ? "out" : "in"; it.stockAt = Date.now(); if (it.stock === "out") found++; } }
       emit(); return { found };
     },
-    upsertBrand: m((b) => { data.brands[b.id] = b; }),
+    upsertBrand: m((b) => { const cur = data.brands[b.id]; data.brands[b.id] = { ...b, sizeAt: cur && cur.currentSize === b.currentSize ? cur.sizeAt : Date.now() }; }),
     deleteBrand: m((id) => { delete data.brands[id]; }),
     async importLink(url) {
       await new Promise((r) => setTimeout(r, 500));

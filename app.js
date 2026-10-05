@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1005-0241";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1005-0241";
-const BUILD = "1005-0241"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1005-0753";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1005-0753";
+const BUILD = "1005-0753"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = ["wishlist", "closet", "sizes"];
@@ -86,14 +86,22 @@ const BEAR = `<svg width="46" height="40" viewBox="0 0 46 40" aria-hidden="true"
   <circle cx="13" cy="25" r="2.2" fill="#D89A9F" opacity=".7"/><circle cx="33" cy="25" r="2.2" fill="#D89A9F" opacity=".7"/>
 </svg>`;
 
-function toast(msg) {
+// A short message at the bottom of the screen. With `action`, it carries one button
+// (like Undo) and stays a little longer, right where the thumb already is.
+function toast(msg, { action = null, ms = action ? 8000 : 2800 } = {}) {
   document.querySelector(".toast")?.remove();
   const t = document.createElement("div");
-  t.className = "toast";
+  t.className = "toast" + (action ? " has-action" : "");
   t.setAttribute("role", "status");
   t.textContent = msg;
+  if (action) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "toast-btn"; b.textContent = action.label;
+    b.addEventListener("click", () => { t.remove(); action.run(); });
+    t.appendChild(b);
+  }
   document.body.appendChild(t);
-  setTimeout(() => t.remove(), 2800);
+  setTimeout(() => t.remove(), ms);
 }
 
 // Runs a change once: the button is locked until it finishes, so double taps do nothing.
@@ -150,6 +158,7 @@ function render() {
       <p>Her wishes, her favorites, and what she already has</p>
     </header>
     <nav class="tabs" role="tablist">
+      <button class="nav-mark" data-act="to-top" aria-label="${name}'s Closet, back to top" tabindex="-1"><i>M</i></button>
       ${MAIN_TABS.map((t) => `<button class="tab" role="tab" aria-selected="${tab === t}" data-tab="${t}">${TAB_LABEL[t]}</button>`).join("")}
     </nav>
     <main>${adminPanel()}${safeBody()}</main>
@@ -200,6 +209,16 @@ const WL_SORTS = [["most", "Most Wanted"], ["price", "Price: Low to High"], ["br
 let wlSort = "most";
 try { const v = localStorage.getItem("closet:wlSort"); if (WL_SORTS.some(([k]) => k === v)) wlSort = v; } catch {}
 const wlOpen = {}; // section open/closed, kept across redraws
+const BUDGETS = [["any", "Any Price"], ["u25", "Under $25"], ["25-50", "$25–$50"], ["50+", "$50+"]];
+let wlBudget = "any";
+let wlGrid = false;
+try { wlGrid = localStorage.getItem("closet:wlView") === "grid"; } catch {}
+const inBudget = (i) => {
+  if (wlBudget === "any") return true;
+  const n = priceNum(i.price);
+  if (!Number.isFinite(n)) return false;
+  return wlBudget === "u25" ? n < 25 : wlBudget === "25-50" ? n >= 25 && n <= 50 : n > 50;
+};
 const priceNum = (p) => { const n = parseFloat(String(p || "").replace(/[^0-9.]/g, "")); return Number.isFinite(n) ? n : Infinity; };
 const mostFirst = (a, b) => (a.priority === "most" ? 0 : 1) - (b.priority === "most" ? 0 : 1);
 const brandName = (i) => brandByName(i.brand)?.name || (i.brand || "").trim();
@@ -217,12 +236,12 @@ function wlSection(key, title, items, inner, { open = true } = {}) {
   const isOpen = wlOpen[key] ?? open;
   return `<details class="brand-fold wl-fold" data-wl="${key}" ${isOpen ? "open" : ""}>
     <summary class="brand-head"><h2>${title}</h2><span class="brand-meta">${items.length} ${items.length === 1 ? "Item" : "Items"}</span><span class="chev" aria-hidden="true"></span></summary>
-    <div class="wl-list">${inner}</div>
+    <div class="wl-list${wlGrid ? " wl-grid" : ""}">${inner}</div>
   </details>`;
 }
 // Clothes are grouped by brand (Most Wanted / Brand sorts); a price or date sort reads best as one list.
 function clothesInner(items) {
-  if (wlSort === "price" || wlSort === "newest") return items.map(itemCard).join("");
+  if (wlSort === "price" || wlSort === "newest") return items.map((i) => itemCard(i)).join("");
   const groups = new Map();
   for (const i of items) {
     const k = brandKey(i.brand) || "~";
@@ -230,12 +249,12 @@ function clothesInner(items) {
     groups.get(k).items.push(i);
   }
   return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))
-    .map(([, g]) => `<h3 class="wl-brand">${esc(g.name)} <span class="muted">${g.items.length}</span></h3>${g.items.map(itemCard).join("")}`).join("");
+    .map(([, g]) => `<h3 class="wl-brand">${esc(g.name)} <span class="muted">${g.items.length}</span></h3>${g.items.map((i) => itemCard(i)).join("")}`).join("");
 }
 function wishlistView() {
   const all = list(S.data.items);
   const count = (c) => all.filter((i) => catOf(i) === c).length;
-  const shown = all.filter((i) => filter.wishlist === "all" || CAT_FILTER[catOf(i)] === filter.wishlist).sort(wlCompare);
+  const shown = all.filter((i) => (filter.wishlist === "all" || CAT_FILTER[catOf(i)] === filter.wishlist) && inBudget(i)).sort(wlCompare);
   const openItems = shown.filter((i) => !isClaimed(i.id));
   const claimed = shown.filter((i) => isClaimed(i.id));
   const top = wlSort === "most" ? openItems.filter((i) => i.priority === "most" && i.stock !== "out") : [];
@@ -243,18 +262,90 @@ function wishlistView() {
   const of = (c) => rest.filter((i) => catOf(i) === c);
   const soldOut = all.filter((i) => i.stock === "out" && !isClaimed(i.id)).length;
   const sections = [
-    wlSection("most", "Most Wanted", top, top.map(itemCard).join("")),
+    wlSection("most", "Most Wanted", top, top.map((i) => itemCard(i, { inMost: true })).join("")),
     wlSection("clothes", "Clothes", of("clothes"), clothesInner(of("clothes"))),
-    wlSection("toy", "Toys", of("toy"), of("toy").map(itemCard).join("")),
-    wlSection("other", "Other", of("other"), of("other").map(itemCard).join("")),
-    wlSection("claimed", "Already Claimed", claimed, claimed.map(itemCard).join(""), { open: false }),
+    wlSection("toy", "Toys", of("toy"), of("toy").map((i) => itemCard(i)).join("")),
+    wlSection("other", "Other", of("other"), of("other").map((i) => itemCard(i)).join("")),
+    wlSection("claimed", "Already Claimed", claimed, claimed.map((i) => itemCard(i)).join(""), { open: false }),
   ].join("");
   return `
     ${owner() ? stockBanner(all, soldOut) : `<div class="note">Tap <b>I'll get this</b> so nobody doubles up. It's anonymous, and you can undo it from this same phone or computer.</div>`}
     <div class="section-title"><h2>Wishlist</h2><span class="muted">${openItems.length} still open</span></div>
     ${filterChips("wishlist", [["all", "All", all.length], ["clothes", "Clothes", count("clothes")], ["toys", "Toys", count("toy")], ["other", "Other", count("other")]])}
-    <label class="wl-sort"><span>Sort</span><select class="in" id="wl-sort" aria-label="Sort the wishlist">${WL_SORTS.map(([k, l]) => `<option value="${k}" ${k === wlSort ? "selected" : ""}>${l}</option>`).join("")}</select></label>
-    ${sections || `<div class="empty">Nothing here right now.</div>`}`;
+    <div class="wl-controls">
+      <select class="in" id="wl-budget" aria-label="Budget">${BUDGETS.map(([k, l]) => `<option value="${k}" ${k === wlBudget ? "selected" : ""}>${l}</option>`).join("")}</select>
+      <select class="in" id="wl-sort" aria-label="Sort the wishlist">${WL_SORTS.map(([k, l]) => `<option value="${k}" ${k === wlSort ? "selected" : ""}>${l}</option>`).join("")}</select>
+      <div class="view-toggle" role="group" aria-label="Layout">
+        <button data-act="wl-view" data-v="list" aria-pressed="${!wlGrid}" aria-label="List"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14"/></svg></button>
+        <button data-act="wl-view" data-v="grid" aria-pressed="${wlGrid}" aria-label="Tiles"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="11" y="3" width="6" height="6" rx="1"/><rect x="3" y="11" width="6" height="6" rx="1"/><rect x="11" y="11" width="6" height="6" rx="1"/></svg></button>
+      </div>
+    </div>
+    ${owner() ? thanksView() : ""}
+    ${sections || `<div class="empty">${wlBudget !== "any" ? "Nothing in that price range right now." : "Nothing here right now."}</div>`}`;
+}
+
+// Owner only: who to thank. Names come from the private document via the API.
+let thanksOpen = false;
+function thanksView() {
+  const list_ = Object.values(S.private?.thanks || {}).sort((a, b) => a.done - b.done || b.at - a.at);
+  const todo = list_.filter((t) => !t.done).length;
+  return `<details class="thanks" data-thanks ${thanksOpen ? "open" : ""}>
+    <summary class="favs-head"><h2>Thank-You Notes</h2><span class="brand-meta">${todo ? `${todo} to write` : list_.length ? "All done" : "None yet"}</span><span class="chev" aria-hidden="true"></span></summary>
+    <p class="muted">When someone adds their name while claiming a gift, it shows up here once you mark the gift received. Only you can see this.</p>
+    ${list_.map((t) => `<div class="thank-row${t.done ? " done" : ""}">
+      <label class="check"><input type="checkbox" data-thank="${t.id}" ${t.done ? "checked" : ""}> <span><b>${esc(t.from)}</b> · ${esc(t.title)}</span></label>
+      <button class="icon-btn" data-act="del-thank" data-id="${t.id}" aria-label="Remove">×</button>
+    </div>`).join("")}
+    <div class="favs-sub-row"><span></span><button class="link" data-act="add-thank">+ Add a Gift</button></div>
+  </details>`;
+}
+function addThankSheet() {
+  openSheet(
+    `<h2>Add a Thank-You</h2>
+     <p class="muted">For a gift that didn't come through the wishlist.</p>
+     <label class="f" for="th-from">From</label><input class="in" id="th-from" maxlength="40" placeholder="Grandma Sue" />
+     <label class="f" for="th-title">Gift</label><input class="in" id="th-title" maxlength="120" placeholder="Wooden rattle" />
+     <div class="err sheet-err" hidden></div>
+     <div class="sheet-actions"><span class="spacer"></span><button class="btn ghost" data-act="cancel">Cancel</button><button class="btn" data-act="save">Save</button></div>`,
+    (el) => {
+      el.querySelector('[data-act="cancel"]').addEventListener("click", () => closeSheet());
+      wireSave(el, async () => {
+        const from = el.querySelector("#th-from").value.trim(), title = el.querySelector("#th-title").value.trim();
+        if (!from || !title) throw new Error("Add who it's from and what it was.");
+        await store.addThank(title, from);
+        thanksOpen = true;
+        return "Added";
+      });
+    }
+  );
+}
+// Claiming: an optional name, seen only by the owner (stored privately on the server).
+function claimSheet(id) {
+  const it = S.data.items?.[id] || S.data.family?.[id];
+  if (!it) return;
+  let saved = "";
+  try { saved = localStorage.getItem("closet:giverName") || ""; } catch {}
+  const who = esc(CONFIG.ownerName || "the family");
+  openSheet(
+    `<h2>Getting This?</h2>
+     <p class="muted">${esc(it.title || "This gift")}</p>
+     <label class="f" for="cl-from">Your name <span class="muted">(optional)</span></label>
+     <input class="in" id="cl-from" maxlength="40" value="${esc(saved)}" placeholder="So ${who} can say thank you" autocomplete="name" />
+     <p class="muted small-note">Only ${who} sees your name. Everyone else just sees that it's taken.</p>
+     <div class="err sheet-err" hidden></div>
+     <div class="sheet-actions"><span class="spacer"></span><button class="btn ghost" data-act="cancel">Cancel</button><button class="btn" data-act="save">I'll Get This</button></div>`,
+    (el) => {
+      el.querySelector('[data-act="cancel"]').addEventListener("click", () => closeSheet());
+      const btn = el.querySelector('[data-act="save"]');
+      wireSave(el, async () => {
+        const from = el.querySelector("#cl-from").value.trim();
+        try { if (from) localStorage.setItem("closet:giverName", from); } catch {}
+        await store.claim(id, from);
+        return "Thank you! It's marked as yours.";
+      });
+      btn.addEventListener("click", () => { if (btn.disabled) btn.textContent = "Saving…"; });
+    }
+  );
 }
 
 function stockBanner(all, soldOut) {
@@ -272,7 +363,14 @@ const ago = (t) => {
   return d <= 0 ? "today" : d === 1 ? "yesterday" : `${d} days ago`;
 };
 
-function itemCard(i) {
+// Does her closet already have this print (same brand + print name)?
+function closetMatch(i) {
+  if (isToy(i) || !(i.printName || "").trim()) return null;
+  const bk = brandKey(i.brand), pn = i.printName.trim().toLowerCase();
+  return list(S.data.prints).find((p) => brandKey(p.brand) === bk && (p.printName || "").trim().toLowerCase() === pn) || null;
+}
+const giverOf = (id) => S.private?.givers?.[id]?.from || "";
+function itemCard(i, { inMost = false } = {}) {
   const claimed = isClaimed(i.id);
   const mine = S.mine.has(i.id);
   const toy = isToy(i);
@@ -299,7 +397,7 @@ function itemCard(i) {
   if (owner()) {
     actions = `
       ${claimed
-        ? `<span class="status taken">Claimed</span><button class="link" data-act="reset" data-id="${i.id}" ${dis(k("reset"))}>${armedLabel(k("reset"), "Reset", "Tap again to reset")}</button>`
+        ? `<span class="status taken">${giverOf(i.id) ? `Claimed by ${esc(giverOf(i.id))}` : "Claimed"}</span><button class="link" data-act="reset" data-id="${i.id}" ${dis(k("reset"))}>${armedLabel(k("reset"), "Reset", "Tap again to reset")}</button>`
         : `<span class="status taken">Open</span>`}
       <span class="spacer"></span>
       <button class="link" data-act="edit-item" data-id="${i.id}">Edit</button>
@@ -312,17 +410,27 @@ function itemCard(i) {
     actions = `<span class="spacer"></span><button class="btn small" data-act="claim" data-id="${i.id}" ${dis(k("claim"))}>${busy.has(k("claim")) ? "Saving…" : "I'll get this"}</button>`;
   }
   const link = safeUrl(i.url) && !i.url.startsWith("data:") ? i.url : "";
+  const has = closetMatch(i);
+  const hasLine = has
+    ? `<div class="has-print">${has.outgrown
+        ? `She had this print and outgrew it, so a bigger size is perfect.`
+        : `She has this print${(has.types || []).length ? ` as a ${esc(has.types.join(", "))}` : ""}.${i.type && (has.types || []).some((t) => t.toLowerCase() === i.type.toLowerCase()) ? " Same style, so only if it's a bigger size." : ""}`}</div>`
+    : "";
 
   return `
-    <article class="card ${claimed ? "claimed" : ""}">
-      ${i.priority === "most" && !claimed ? `<span class="ribbon">Most Wanted</span>` : ""}
+    <article class="card ${claimed ? "claimed" : ""}" id="item-${i.id}">
+      ${i.priority === "most" && !claimed && !inMost ? `<span class="ribbon">Most Wanted</span>` : ""}
       ${link ? `<a href="${esc(link)}" target="_blank" rel="noopener noreferrer">${img(i.image, "thumb", i.title)}</a>` : img(i.image, "thumb", i.title)}
       <div class="card-body">
         <h3>${link ? `<a class="title-link" href="${esc(link)}" target="_blank" rel="noopener noreferrer">${esc(i.title || "Untitled")}</a>` : esc(i.title || "Untitled")}</h3>
         ${sub ? `<div class="meta">${sub}</div>` : ""}
         <div class="chips">${chips.filter(Boolean).join("")}</div>
+        ${hasLine}
         ${i.notes ? `<div class="meta" style="margin-top:6px">${esc(i.notes)}</div>` : ""}
-        ${link ? `<a class="link" style="padding-left:0" href="${esc(link)}" target="_blank" rel="noopener noreferrer">View item ↗</a>` : ""}
+        <div class="card-links">
+          ${link ? `<a class="link" href="${esc(link)}" target="_blank" rel="noopener noreferrer">View item ↗</a>` : ""}
+          <button class="link quiet" data-act="share-item" data-id="${i.id}">Share</button>
+        </div>
       </div>
       <div class="actions">${actions}</div>
     </article>`;
@@ -330,12 +438,38 @@ function itemCard(i) {
 
 function closetView() {
   return `
-    <div class="section-title"><h2>What She Has</h2>${owner() ? `<span class="title-links">${selectMode ? "" : photoButton()}${selectMode ? "" : `<button class="link" data-act="import-list">Import List</button>`}<button class="link" data-act="select-mode">${selectMode ? "Done" : "Select"}</button></span>` : ""}</div>
+    <div class="section-title"><h2>What She Has</h2>${owner() ? `<span class="title-links">${selectMode ? "" : photoButton()}${selectMode ? "" : `<button class="link" data-act="import-list">Import List</button>`}${selectMode ? "" : `<button class="link" data-act="backup">Backup</button>`}<button class="link" data-act="select-mode">${selectMode ? "Done" : "Select"}</button></span>` : ""}</div>
     <div class="search">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
       <input type="search" id="closet-search" class="in" value="${esc(closetQuery)}" placeholder="Search her closet, like “mermaids”" aria-label="Search her closet by print, brand or style" autocomplete="off" enterkeyhint="search" />
     </div>
+    ${owner() ? undoBar() : ""}
     <div id="closet-results">${closetResults()}</div>`;
+}
+// After a bulk delete the owner can bring those back for a week.
+function undoBar() {
+  const t = S.data.trash;
+  if (!t || Date.now() - (t.at || 0) > 7 * 86400000) return "";
+  const n = t.count ?? Object.keys(t.records || {}).length;
+  if (!n) return "";
+  const what = t.kind === "toys" ? (n === 1 ? "item" : "items") : (n === 1 ? "print" : "prints");
+  return `<div class="stock-bar undo-bar"><span>Deleted ${n} ${what} ${ago(t.at)}.</span><button class="link" data-act="undo-delete" ${dis("undo")}>${busy.has("undo") ? "Restoring…" : "Undo"}</button></div>`;
+}
+// Owner backup: everything in her closet as a spreadsheet (CSV opens in Excel, Numbers and Google Sheets).
+function downloadBackup() {
+  const cell = (v) => { const x = String(v ?? ""); return /[",\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x; };
+  const rows = [["Kind", "Brand", "Name / Print", "Styles or Type", "Favorite", "Outgrown", "Link", "Photo"]];
+  for (const p of list(S.data.prints).sort((a, b) => brandKey(a.brand).localeCompare(brandKey(b.brand)) || (a.printName || "").localeCompare(b.printName || "")))
+    rows.push(["Clothes", p.brand, p.printName, (p.types || []).join("; "), p.favorite ? "Yes" : "", p.outgrown ? "Yes" : "", p.url, p.image]);
+  for (const t of list(S.data.toys)) rows.push([hasCat(t) === "other" ? "Other" : "Toy", t.brand, t.name, t.type, "", "", t.url, t.image]);
+  for (const f of list(S.data.styleFavs)) rows.push(["Favorite style", f.brand, f.name, "", "Yes", "", f.url, f.image]);
+  const csv = "\ufeff" + rows.map((r) => r.map(cell).join(",")).join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  a.download = `${CONFIG.babyName.toLowerCase()}-closet-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast(`Saved ${rows.length - 1} rows`);
 }
 
 // Anyone can hide outgrown prints from brands that aren't her favorites. Outgrown prints in
@@ -570,10 +704,11 @@ function sizesView() {
     <div class="note">Her current size in each brand. When shopping, get <b>this size or bigger</b>. She grows fast!</div>
     ${plansSection()}
     <div class="section-title"><h2>Favorite Brands</h2>${owner() ? `<button class="link" data-act="add-brand">+ Brand</button>` : ""}</div>
+    ${owner() ? sizeNudge(bs) : ""}
     ${bs.length
       ? bs.map((b) => `
-      <div class="size-row">
-        <div class="name"><strong>${esc(b.name)}</strong>${b.notes ? `<span class="muted">${esc(b.notes)}</span>` : ""}</div>
+      <div class="size-row${owner() && sizeStale(b) ? " stale" : ""}">
+        <div class="name"><strong>${esc(b.name)}</strong>${b.notes ? `<span class="muted">${esc(b.notes)}</span>` : ""}${owner() && b.sizeAt && b.currentSize ? `<span class="muted size-age">Size set ${ago(b.sizeAt)}</span>` : ""}</div>
         <div class="size-badge">${esc(b.currentSize || "—")}<small>${b.currentSize ? "or bigger" : "size not set"}</small></div>
         ${owner() ? `<button class="link" data-act="edit-brand" data-id="${b.id}">Edit</button>` : ""}
       </div>`).join("")
@@ -582,6 +717,17 @@ function sizesView() {
     ${herColors().length
       ? `<div class="swatches">${herColors().map((c) => `<div class="swatch"><i style="background:${esc(c.hex)}"></i>${esc(c.name)}</div>`).join("")}</div>`
       : `<div class="empty">${owner() ? "No colors yet. Tap Edit to add some." : "No colors listed yet."}</div>`}`;
+}
+
+// Owner reminder: babies outgrow sizes fast, and "Fits Now" + sold-out checks rely on these.
+const SIZE_STALE_MS = 60 * 86400000;
+const sizeStale = (b) => !!b.currentSize && !!b.sizeAt && Date.now() - b.sizeAt > SIZE_STALE_MS;
+function sizeNudge(bs) {
+  const stale = bs.filter(sizeStale);
+  if (!stale.length) return "";
+  const names = stale.map((b) => esc(b.name));
+  const list_ = names.length > 2 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names.join(" and ");
+  return `<div class="stock-bar alert size-nudge"><span><b>Still the right size?</b> ${list_} ${stale.length === 1 ? "hasn't" : "haven't"} changed in over two months. Tap Edit to update, or</span><button class="link" data-act="confirm-sizes" ${dis("sizes")}>${busy.has("sizes") ? "Saving…" : "All Still Right"}</button></div>`;
 }
 
 // Saved colors win; until the first save, the starter palette from config.js shows.
@@ -861,14 +1007,17 @@ async function runBulk(op) {
   if (!ids.length) return;
   if (op === "delete") {
     const what = kind === "prints" ? (ids.length === 1 ? "print" : "prints") : (ids.length === 1 ? "item" : "items");
-    const ok = await confirmModal({ title: `Delete ${ids.length} ${what}?`, message: "They'll be removed from her closet for everyone. This can't be undone.", confirmLabel: "Delete" });
+    const ok = await confirmModal({ title: `Delete ${ids.length} ${what}?`, message: "They'll be removed from her closet for everyone. You can undo this for a week.", confirmLabel: "Delete" });
     if (!ok) return;
   }
   const done = { delete: "Deleted", favorite: "Marked as favorites", unfavorite: "Removed from favorites", outgrown: "Marked outgrown" }[op];
   const okRun = await act("bulk", async () => {
     for (let i = 0; i < ids.length; i += 200) await store.bulkCloset(kind, ids.slice(i, i + 200), op);
   }, `${done}: ${ids.length}`);
-  if (okRun) { picked.clear(); if (op === "delete") selectMode = false; render(); }
+  if (okRun) {
+    picked.clear(); if (op === "delete") selectMode = false; render();
+    if (op === "delete") toast(`Deleted ${ids.length}`, { action: { label: "Undo", run: () => act("undo", () => store.undoBulkDelete(), "Restored") } });
+  }
 }
 
 // ── enlarge a closet photo ───────────────────────────────────────────
@@ -950,7 +1099,7 @@ function familyCard(i) {
   ].filter(Boolean);
   let actions;
   if (owner()) {
-    actions = `${claimed ? `<span class="status taken">Claimed</span><button class="link" data-act="reset" data-id="${i.id}" ${dis(k("reset"))}>${armedLabel(k("reset"), "Reset", "Tap again to reset")}</button>` : `<span class="status taken">Open</span>`}
+    actions = `${claimed ? `<span class="status taken">${giverOf(i.id) ? `Claimed by ${esc(giverOf(i.id))}` : "Claimed"}</span><button class="link" data-act="reset" data-id="${i.id}" ${dis(k("reset"))}>${armedLabel(k("reset"), "Reset", "Tap again to reset")}</button>` : `<span class="status taken">Open</span>`}
       <span class="spacer"></span><button class="link" data-act="edit-family" data-id="${i.id}">Edit</button>
       <button class="btn small soft" data-act="family-got" data-id="${i.id}" ${dis(k("fam-got"))}>${armedLabel(k("fam-got"), "Got it", "Tap again to remove")}</button>`;
   } else if (mine) {
@@ -962,7 +1111,7 @@ function familyCard(i) {
   }
   const pic = img(i.image, "thumb", i.title);
   return `
-    <article class="card ${claimed ? "claimed" : ""}">
+    <article class="card ${claimed ? "claimed" : ""}" id="item-${i.id}">
       ${i.priority === "most" && !claimed ? `<span class="ribbon">Most Wanted</span>` : ""}
       ${link ? `<a href="${esc(link)}" target="_blank" rel="noopener noreferrer">${pic}</a>` : pic}
       <div class="card-body">
@@ -970,7 +1119,10 @@ function familyCard(i) {
         ${i.brand ? `<div class="meta">${esc(i.brand)}</div>` : ""}
         ${chips.length ? `<div class="chips">${chips.join("")}</div>` : ""}
         ${i.notes ? `<div class="meta" style="margin-top:6px">${esc(i.notes)}</div>` : ""}
-        ${link ? `<a class="link" style="padding-left:0" href="${esc(link)}" target="_blank" rel="noopener noreferrer">View item ↗</a>` : ""}
+        <div class="card-links">
+          ${link ? `<a class="link" href="${esc(link)}" target="_blank" rel="noopener noreferrer">View item ↗</a>` : ""}
+          <button class="link quiet" data-act="share-item" data-id="${i.id}">Share</button>
+        </div>
       </div>
       <div class="actions">${actions}</div>
     </article>`;
@@ -1091,12 +1243,49 @@ async function forceUpdate() {
 
 // ── share ────────────────────────────────────────────────────────────
 const SITE_URL = "https://alyssamanse.github.io/MerrittsCloset/";
+const FAMILY_URL = `${SITE_URL}#family`;
+async function copyOrShare({ title, text, url }) {
+  if (navigator.share) {
+    try { await navigator.share({ title, text, url }); return; } catch (e) { if (e?.name === "AbortError") return; }
+  }
+  try { await navigator.clipboard.writeText(url); toast("Link copied"); } catch { toast(url); }
+}
+function shareItem(id) {
+  const it = S.data.items?.[id] || S.data.family?.[id];
+  const title = it?.title || "A gift idea";
+  return copyOrShare({ title, text: `${title}, from ${CONFIG.babyName}'s wishlist`, url: `${SITE_URL}#item-${id}` });
+}
+// A link like …/#item-abc123 opens the right page, unfolds its section and highlights the card.
+function openDeepLink() {
+  const m = /^#item-([A-Za-z0-9_-]{1,40})$/.exec(location.hash);
+  if (!m || !S.data) return false;
+  const id = m[1], it = S.data.items?.[id], fam = S.data.family?.[id];
+  if (!it && !fam) { toast("That item isn't on the list anymore"); return false; }
+  if (it) {
+    tab = "wishlist"; filter.wishlist = "all"; wlBudget = "any";
+    wlOpen[isClaimed(id) ? "claimed" : wlSort === "most" && it.priority === "most" && it.stock !== "out" ? "most" : catOf(it)] = true;
+  } else {
+    tab = "family"; filter.person = "all"; familyQuery = ""; openPeople.add(fam.person);
+  }
+  render();
+  requestAnimationFrame(() => {
+    const el = document.getElementById(`item-${id}`);
+    if (!el) return;
+    el.scrollIntoView({ block: "center" });
+    el.classList.add("flash");
+    setTimeout(() => el.classList.remove("flash"), 2600);
+  });
+  return true;
+}
 function shareSheet() {
   openSheet(
     `<h2>Share ${esc(CONFIG.babyName)}'s Closet</h2>
      <p class="muted">Anyone with the link can see the list and claim gifts. They can't change anything else.</p>
      <div class="share-link"><input class="in" id="share-url" readonly value="${SITE_URL}" aria-label="Link" /><button class="btn small" data-m="copy">Copy</button></div>
      ${navigator.share ? `<button class="btn ghost" data-m="native">Share…</button>` : ""}
+     ${owner() ? `<h3 class="favs-sub">Family Wishlist Link</h3>
+     <p class="muted">For anyone who asks what you, Michael or Penny would like. It isn't shown on the main page.</p>
+     <div class="share-link"><input class="in" id="share-fam" readonly value="${FAMILY_URL}" aria-label="Family wishlist link" /><button class="btn small" data-m="copy-fam">Copy</button></div>` : ""}
      <div class="qr"><img src="qr.png" alt="QR code for ${esc(CONFIG.babyName)}'s Closet" width="220" height="220" /><a class="link" href="qr.png" download="merritts-closet-qr.png">Save QR code</a></div>
      <div class="sheet-actions"><span class="spacer"></span><button class="btn ghost" data-act="cancel">Done</button></div>`,
     (el) => {
@@ -1104,6 +1293,10 @@ function shareSheet() {
       el.querySelector('[data-m="copy"]').addEventListener("click", async (ev) => {
         try { await navigator.clipboard.writeText(SITE_URL); ev.target.textContent = "Copied"; }
         catch { const i = el.querySelector("#share-url"); i.focus(); i.select(); }
+      });
+      el.querySelector('[data-m="copy-fam"]')?.addEventListener("click", async (ev) => {
+        try { await navigator.clipboard.writeText(FAMILY_URL); ev.target.textContent = "Copied"; }
+        catch { const i = el.querySelector("#share-fam"); i.focus(); i.select(); }
       });
       el.querySelector('[data-m="native"]')?.addEventListener("click", () => navigator.share({ title: `${CONFIG.babyName}'s Closet`, text: `${CONFIG.babyName}'s wishlist and closet`, url: SITE_URL }).catch(() => {}));
     }
@@ -1619,6 +1812,8 @@ $app.addEventListener("input", (ev) => {
   if (out) out.innerHTML = closetResults();
 });
 $app.addEventListener("change", (ev) => {
+  if (ev.target.id === "wl-budget") { wlBudget = ev.target.value; return render(); }
+  if (ev.target.dataset?.thank) { const tid = ev.target.dataset.thank; return act(`thank:${tid}`, () => store.setThank(tid, ev.target.checked)); }
   if (ev.target.id === "wl-sort") {
     wlSort = ev.target.value;
     try { localStorage.setItem("closet:wlSort", wlSort); } catch {}
@@ -1634,6 +1829,7 @@ $app.addEventListener("toggle", (ev) => { // remember which brands are open acro
   const d = ev.target;
   if (d.dataset?.favs !== undefined) { favsOpen = d.open; return; }
   if (d.classList?.contains("wl-fold")) { wlOpen[d.dataset.wl] = d.open; return; }
+  if (d.dataset?.thanks !== undefined) { thanksOpen = d.open; return; }
   if (d.classList?.contains("person-fold")) { if (d.open) openPeople.add(d.dataset.person); else openPeople.delete(d.dataset.person); return; }
   if (d.classList?.contains("brand-fold")) { if (d.open) openBrands.add(d.dataset.brand); else openBrands.delete(d.dataset.brand); }
 }, true);
@@ -1653,11 +1849,11 @@ $app.addEventListener("click", (ev) => {
     tab = t.dataset.tab;
     history.replaceState(null, "", `${location.search}#${tab}`);
     render();
-    window.scrollTo({ top: 0 });
+    scrollToContent();
     return;
   }
   if (t.dataset.act === "go-tab") {
-    tab = t.dataset.to; history.replaceState(null, "", `${location.search}#${tab}`); render(); window.scrollTo({ top: 0 });
+    tab = t.dataset.to; history.replaceState(null, "", `${location.search}#${tab}`); render(); scrollToContent();
     if (t.dataset.focus) document.getElementById(t.dataset.focus)?.focus();
     return;
   }
@@ -1665,7 +1861,14 @@ $app.addEventListener("click", (ev) => {
   if (!store) return;
   const id = t.dataset.id;
   switch (t.dataset.act) {
-    case "claim": return act(`claim:${id}`, () => store.claim(id), "Thank you! It's marked as yours.");
+    case "claim": return claimSheet(id);
+    case "share-item": return shareItem(id);
+    case "undo-delete": return act("undo", () => store.undoBulkDelete(), "Restored");
+    case "backup": return downloadBackup();
+    case "confirm-sizes": return act("sizes", () => store.confirmSizes(), "Thanks! We'll check again in two months.");
+    case "wl-view": wlGrid = t.dataset.v === "grid"; try { localStorage.setItem("closet:wlView", wlGrid ? "grid" : "list"); } catch {} return render();
+    case "add-thank": return addThankSheet();
+    case "del-thank": return act(`thank:${id}`, () => store.deleteThank(id));
     case "unclaim": return act(`claim:${id}`, () => store.unclaim(id), "Undone. It's open again.");
     case "reset": if (confirmTap(`reset:${id}`)) act(`reset:${id}`, () => store.resetClaim(id), "Claim cleared"); return;
     case "receive": return act(`receive:${id}`, () => store.receive(id), isToy(S.data.items[id] || {}) ? "Moved to what she has" : "Moved to the closet");
@@ -1708,6 +1911,7 @@ $app.addEventListener("click", (ev) => {
   }
 });
 window.addEventListener("hashchange", () => {
+  if (openDeepLink()) return;
   const h = location.hash.slice(1);
   if (TABS.includes(h) && h !== tab) { tab = h; render(); }
 });
@@ -1734,6 +1938,24 @@ async function checkForNewVersion() {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForNewVersion(); });
 setInterval(() => { if (document.visibilityState === "visible") checkForNewVersion(); }, 15 * 60 * 1000);
 
+// ── compact header ───────────────────────────────────────────────────
+// The big logo shows on first open; once it's scrolled away a small M appears in the
+// tab bar, and switching tabs lands on the content instead of scrolling back up to the logo.
+function heroBottom() {
+  const h = document.querySelector(".hero");
+  return h ? h.offsetTop + h.offsetHeight : 0;
+}
+function scrollToContent() {
+  const top = heroBottom();
+  window.scrollTo({ top: window.scrollY > top - 4 ? top : 0 });
+}
+let compactTick = false;
+window.addEventListener("scroll", () => {
+  if (compactTick) return;
+  compactTick = true;
+  requestAnimationFrame(() => { compactTick = false; document.body.classList.toggle("compact", window.scrollY > heroBottom() - 8); });
+}, { passive: true });
+
 // ── boot ─────────────────────────────────────────────────────────────
 document.title = `${CONFIG.babyName}'s Closet`;
 render();
@@ -1747,5 +1969,9 @@ checkForNewVersion();
     render();
     return;
   }
-  store.start((next) => { S = next; render(); maybeAutoStock(); });
+  let linked = false;
+  store.start((next) => {
+    S = next; render(); maybeAutoStock();
+    if (!linked && S.data) { linked = true; openDeepLink(); }
+  });
 })();

@@ -430,6 +430,71 @@
   .style-fav a.tile-img { cursor: pointer; }
   .style-fav .ext { color: var(--rose); font-weight: 700; margin-top: 3px; }
   .style-fav .style-edit { display: block; padding: 0 8px 8px; font-size: 12.5px; }
+  /* ── Oct 5 batch: compact header, wishlist tools, thank-yous, reminders ── */
+  .nav-mark { position: absolute; left: 12px; top: 50%; transform: translateY(-50%) scale(.7); opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s;
+    width: 32px; height: 32px; border-radius: 50%; border: 1.3px solid var(--rose); background: none; color: var(--rose); padding: 0; cursor: pointer; display: grid; place-items: center; }
+  .nav-mark i { font: italic 600 19px/1 var(--logo); margin-top: 1px; }
+  body.compact .nav-mark { opacity: 1; pointer-events: auto; transform: translateY(-50%); }
+  @media (max-width: 360px) { .nav-mark { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .nav-mark { transition: none; } }
+
+  .wl-controls { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; margin: 4px 0 2px; }
+  .wl-controls select.in { width: auto; min-width: 0; padding-top: 7px; padding-bottom: 7px; font-size: 14px; }
+  .wl-controls { flex-wrap: nowrap; }
+  .wl-controls select.in { flex: 1 1 0; min-width: 0; max-width: 200px; text-overflow: ellipsis; }
+  .wl-controls #wl-budget { flex-grow: .8; }
+  .wl-controls #wl-sort { flex-grow: 1.25; }
+  .view-toggle { flex: none; display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .view-toggle button { width: 38px; height: 36px; border: 0; background: var(--surface); color: var(--taupe); display: grid; place-items: center; cursor: pointer; padding: 0; }
+  .view-toggle button + button { border-left: 1px solid var(--line); }
+  .view-toggle button[aria-pressed="true"] { background: var(--blush); color: var(--rose); }
+  .view-toggle svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+
+  .card-links { display: flex; gap: 16px; align-items: center; margin-top: 6px; }
+  .card-links .link { padding-left: 0; padding-right: 0; }
+  .has-print { margin-top: 8px; font-size: 13px; line-height: 1.35; color: var(--moss); font-weight: 600; }
+  .has-print::before { content: "✓ "; }
+  .card.flash { outline: 2px solid var(--rose); outline-offset: 3px; }
+
+  /* Wishlist tiles: two across */
+  .wl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: stretch; }
+  .wl-grid > .wl-brand { grid-column: 1 / -1; margin-bottom: 0; }
+  .wl-grid .card { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 10px; }
+  .wl-grid .card > a, .wl-grid .card > img { display: block; }
+  .wl-grid .thumb { width: 100%; height: auto; aspect-ratio: 4 / 5; }
+  .wl-grid .card h3 { font-size: 15px; padding-right: 0 !important; }
+  .wl-grid .meta { font-size: 12.5px; }
+  .wl-grid .chips { margin-top: 6px; gap: 4px; }
+  .wl-grid .chips .chip:not(.tan):not(.warn) { display: none; }
+  .wl-grid .card-body > .meta[style], .wl-grid .card-links .link[href] { display: none; }
+  .wl-grid .has-print { font-size: 12px; }
+  .wl-grid .ribbon { top: 16px; left: 16px; right: auto; background: var(--surface); padding: 3px 7px; border-radius: 4px; font-size: 11px; }
+  .wl-grid .actions { margin-top: auto; gap: 6px; padding-top: 8px; }
+  .wl-grid .actions .btn.small { width: 100%; }
+  .wl-grid .actions .spacer { display: none; }
+  .wl-grid .status { font-size: 12.5px; }
+
+  /* Thank-you notes (owner only) */
+  .thanks { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px 6px; margin: 12px 0 16px; }
+  .thanks > summary { list-style: none; cursor: pointer; }
+  .thanks > summary::-webkit-details-marker { display: none; }
+  .thanks > summary h2 { font-size: 18px; }
+  .thanks[open] > summary .chev { transform: rotate(-135deg); margin-top: 4px; }
+  .thanks > .muted { margin: 6px 0 8px; font-size: 13px; }
+  .thank-row { display: flex; align-items: center; gap: 8px; border-top: 1px dashed var(--line); padding: 8px 0; }
+  .thank-row .check { flex: 1; margin: 0; }
+  .thank-row.done span { color: var(--taupe); text-decoration: line-through; }
+  .small-note { font-size: 13px; margin-top: 6px; }
+
+  .undo-bar { margin: 6px 0 4px; }
+  .size-age { display: block; font-size: 12px; margin-top: 2px; }
+  .size-row.stale .size-age { color: var(--rose); font-weight: 600; }
+  .size-nudge { margin-bottom: 10px; }
+
+  /* Her Favorites: one swipeable row instead of a half-empty grid */
+  .favs .grid { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(132px, 40%); overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
+  .favs .grid > * { scroll-snap-align: start; }
+  @media (min-width: 560px) { .favs .grid { grid-auto-columns: minmax(150px, 24%); } }
   /* Family page */
   .back-row { margin: -6px 0 4px; }
   .back-row .link { padding-left: 0; }
@@ -472,6 +537,8 @@
   .bulk-bar .btn:disabled { opacity: .45; }
   .btn.danger-btn { background: #A8423A; }
   main:has(~ .bulk-bar) { padding-bottom: 160px; }
+  .toast.has-action { display: flex; align-items: center; gap: 14px; padding: 8px 8px 8px 16px; }
+  .toast-btn { background: none; border: 0; color: #F4C9CF; font: 800 14px/1 var(--sans); padding: 8px 10px; cursor: pointer; text-transform: none; }
   body:has(.bulk-bar) .toast { bottom: calc(150px + env(safe-area-inset-bottom)); }
   .og-toggle { display: flex; align-items: center; gap: 8px; margin: -4px 0 12px; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; }
   .og-toggle input { width: 18px; height: 18px; accent-color: var(--rose); margin: 0; }
@@ -479,6 +546,6 @@
 </head>
 <body>
   <div id="app"></div>
-  <script type="module" src="app.js?v=1005-0241"></script>
+  <script type="module" src="app.js?v=1005-0753"></script>
 </body>
 </html>

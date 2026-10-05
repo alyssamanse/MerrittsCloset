@@ -6,65 +6,7 @@ const assert = require("node:assert");
 const path = require("path");
 const crypto = require("crypto");
 
-// ── fake firebase-admin ─────────────────────────────────────────────
-const store = { doc: null, reads: 0, writes: 0 };
-const fakeAdmin = {
-  apps: [1],
-  initializeApp() {},
-  firestore: Object.assign(() => ({
-    collection: (c) => ({ doc: (id) => ({ path: `${c}/${id}`, async get() { store.reads++; return { exists: !!store.doc, data: () => structuredClone(store.doc) }; } }) }),
-    async runTransaction(fn) {
-      const tx = {
-        async get() { store.reads++; return { exists: !!store.doc, data: () => structuredClone(store.doc) }; },
-        set(_ref, data) { store.pending = data; },
-      };
-      store.pending = undefined;
-      const r = await fn(tx);
-      if (store.pending) { store.writes++; const { updatedAt, ...rest } = store.pending; store.doc = rest; }
-      return r;
-    },
-  }), { FieldValue: { serverTimestamp: () => "ts" } }),
-  auth: () => ({
-    async verifyIdToken(t) {
-      if (t === "owner") return { uid: "u1", email: "owner@example.com", email_verified: true, firebase: { sign_in_provider: "google.com" } };
-      if (t === "stranger") return { uid: "u2", email: "someone@example.com", email_verified: true, firebase: { sign_in_provider: "google.com" } };
-      if (t === "spoof") return { uid: "u3", email: "owner@example.com", email_verified: false, firebase: { sign_in_provider: "password" } };
-      throw new Error("bad token");
-    },
-  }),
-  appCheck: () => ({ async verifyToken(t) { if (t !== "good-appcheck") throw new Error("bad"); } }),
-};
-require.cache[require.resolve("firebase-admin")] = { id: "fa", filename: "fa", loaded: true, exports: fakeAdmin };
-
-Object.assign(process.env, {
-  WISHLIST_ID: "w_test1234", OWNER_EMAIL: "owner@example.com",
-  ALLOWED_ORIGINS: "https://site.example", REQUIRE_APP_CHECK: "true",
-});
-require(path.join(__dirname, "..", "index.js"));
-const { getFunction } = require("@google-cloud/functions-framework/testing");
-const api = getFunction("api");
-const logic = require("../logic");
-
-let ipCounter = 0;
-async function call(action, payload, { token, appCheck = "good-appcheck", origin = "https://site.example", method = "POST", ip, raw } = {}) {
-  const headers = {
-    origin, "x-forwarded-for": `9.9.9.9, ${ip || `10.0.${(ipCounter >> 8) & 255}.${ipCounter++ & 255}`}`,
-    ...(token && { authorization: `Bearer ${token}` }), ...(appCheck && { "x-firebase-appcheck": appCheck }),
-  };
-  const req = { method, body: raw ?? { action, payload }, ip: "1.1.1.1", get: (h) => headers[h.toLowerCase()] };
-  return new Promise((resolve) => {
-    const res = {
-      statusCode: 200, headers: {},
-      set(k, v) { this.headers[k] = v; return this; },
-      status(c) { this.statusCode = c; return this; },
-      json(b) { resolve({ status: this.statusCode, body: b, headers: this.headers }); },
-      send(b) { resolve({ status: this.statusCode, body: b, headers: this.headers }); },
-    };
-    api(req, res);
-  });
-}
-const key = () => crypto.randomBytes(32).toString("hex");
-const item = (id, extra = {}) => ({ id, title: "Zip Romper", brand: "Kyte Baby", size: "12–18M", priority: "most", ...extra });
+const { store, MAIN, call, key, item, logic, api } = require("./harness");
 
 test("owner can set up and add items; guests cannot", async () => {
   assert.equal((await call("init", {}, { token: "owner" })).status, 200);
@@ -487,4 +429,48 @@ test("favorite styles: owner only, strict fields, capped", () => {
   assert.throws(() => reduce(state, "upsertStyleFav", { style: { ...style, url: "javascript:alert(1)" } }, ctx));
   ({ state } = reduce(state, "deleteStyleFav", { id: "sf_00000001" }, ctx));
   assert.deepEqual(state.styleFavs, {});
+});
+
+test("unclaim and owner reset forget the gifter's name", () => {
+  const ctx = { isOwner: true, now: 1, newId: () => "t1" };
+  const priv = { givers: { a1: { from: "Sam", at: 1 } }, thanks: {} };
+  for (const action of ["unclaim", "resetClaim", "deleteItem"]) {
+    const { priv: next } = logic.reducePrivate(priv, action, { itemId: "a1", id: "a1" }, { ...ctx, publicChanged: true });
+    assert.equal(next.givers.a1, undefined, action);
+  }
+  // nothing changes if the public change was refused
+  assert.equal(logic.reducePrivate(priv, "unclaim", { itemId: "a1" }, { ...ctx, publicChanged: false }).changed, false);
+});
+
+test("bulk delete can be undone, and only a count is public", () => {
+  const ctx = { isOwner: true, now: 1000 };
+  let { state } = logic.reduce(null, "init", {}, ctx);
+  for (const n of [1, 2, 3]) ({ state } = logic.reduce(state, "upsertPrint", { print: { id: `print_0000000${n}`, brand: "Kyte Baby", printName: `P${n}` } }, ctx));
+  ({ state } = logic.reduce(state, "bulkCloset", { kind: "prints", ids: ["print_00000001", "print_00000002"], op: "delete" }, ctx));
+  assert.equal(Object.keys(state.prints).length, 1);
+  assert.deepEqual(logic.publicView(state).trash, { kind: "prints", at: 1000, count: 2 });
+  ({ state } = logic.reduce(state, "undoBulkDelete", {}, ctx));
+  assert.equal(Object.keys(state.prints).length, 3);
+  assert.equal(state.trash, undefined);
+  assert.equal(logic.reduce(state, "undoBulkDelete", {}, ctx).changed, false);
+  // undo expires after a week
+  ({ state } = logic.reduce(state, "bulkCloset", { kind: "prints", ids: ["print_00000003"], op: "delete" }, ctx));
+  ({ state } = logic.reduce(state, "upsertPrint", { print: { id: "print_00000009", brand: "B", printName: "Q" } }, { isOwner: true, now: 1000 + 8 * 86400000 }));
+  assert.equal(state.trash, undefined);
+  assert.throws(() => logic.reduce(state, "undoBulkDelete", {}, { isOwner: false, now: 1 }), /owner/i);
+});
+
+test("brand size dates are set by the server", () => {
+  let { state } = logic.reduce(null, "init", {}, { isOwner: true, now: 1 });
+  const brand = { id: "brand_0000001", name: "Kyte Baby", currentSize: "6–12M", notes: "" };
+  ({ state } = logic.reduce(state, "upsertBrand", { brand }, { isOwner: true, now: 10 }));
+  assert.equal(state.brands.brand_0000001.sizeAt, 10);
+  assert.equal(logic.reduce(state, "upsertBrand", { brand }, { isOwner: true, now: 20 }).changed, false);
+  ({ state } = logic.reduce(state, "upsertBrand", { brand: { ...brand, notes: "runs small" } }, { isOwner: true, now: 30 }));
+  assert.equal(state.brands.brand_0000001.sizeAt, 10, "a note change keeps the date");
+  ({ state } = logic.reduce(state, "upsertBrand", { brand: { ...brand, currentSize: "12–18M" } }, { isOwner: true, now: 40 }));
+  assert.equal(state.brands.brand_0000001.sizeAt, 40);
+  ({ state } = logic.reduce(state, "confirmSizes", {}, { isOwner: true, now: 50 }));
+  assert.equal(state.brands.brand_0000001.sizeAt, 50);
+  assert.throws(() => logic.reduce(state, "upsertBrand", { brand: { ...brand, sizeAt: 1 } }, { isOwner: true, now: 60 }));
 });

@@ -11,11 +11,13 @@
 //   3. App Check token                      (no Firestore)
 //   4. owner ID token for owner actions     (no Firestore)
 //   5. action rate limit                    (no Firestore)
-//   6. validation + change, 1 read + ≤1 write in a transaction
+//   6. validation + change: reads the list (and the owner-only private doc) and
+//      writes only what changed, in one transaction
 
 const functions = require("@google-cloud/functions-framework");
 const admin = require("firebase-admin");
-const { reduce, publicView, Limiter, RATES, ApiError, GUEST_ACTIONS, OWNER_ACTIONS } = require("./logic");
+const { reduce, reducePrivate, PRIVATE_ACTIONS, publicView, Limiter, RATES, ApiError, GUEST_ACTIONS, OWNER_ACTIONS } = require("./logic");
+const crypto = require("crypto");
 const { importLink, checkStock } = require("./importer");
 
 const ENV = {
@@ -164,6 +166,26 @@ functions.http("api", async (req, res) => {
       return res.json({ ok: true, checked: recs.length, found, data: publicView(result) });
     }
 
+    const ref = db.collection("wishlists").doc(ENV.wishlistId);
+    // Owner-only private doc (gifter names, thank-you list). Firestore rules deny
+    // every client read/write of subcollections, so only this API can reach it.
+    const privRef = ref.collection("private").doc("owner");
+    const newId = () => crypto.randomBytes(10).toString("hex");
+
+    if (PRIVATE_ACTIONS.has(action)) {
+      if (!owner) throw new ApiError(403, "Only the owner can do that.");
+      limit("owner-writes", RATES.ownerWrites);
+      const priv = await db.runTransaction(async (tx) => {
+        const ps = await tx.get(privRef);
+        const prevPriv = ps.exists ? ps.data() : null;
+        if (action === "getPrivate") return prevPriv;
+        const { priv: next, changed } = reducePrivate(prevPriv, action, payload, { isOwner: true, now: Date.now(), newId });
+        if (changed) tx.set(privRef, next);
+        return next;
+      }, { maxAttempts: 3 });
+      return res.json({ ok: true, private: priv || { givers: {}, thanks: {} } });
+    }
+
     if (GUEST_ACTIONS.has(action)) limit("guest-writes", RATES.guestWrites);
     else if (OWNER_ACTIONS.has(action)) {
       if (!owner) throw new ApiError(403, "Only the owner can do that.");
@@ -172,17 +194,28 @@ functions.http("api", async (req, res) => {
 
     // The wishlist id comes from server config, never from the request,
     // so a caller cannot point this at any other document.
-    const ref = db.collection("wishlists").doc(ENV.wishlistId);
-    const result = await db.runTransaction(async (tx) => {
+    // Only actions that can touch gifter names read the private doc.
+    const touchesPrivate = ["claim", "unclaim", "resetClaim", "deleteItem", "receive", "deleteFamilyItem"].includes(action);
+    const out = await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
+      const ps = touchesPrivate ? await tx.get(privRef) : null;
       const prev = snap.exists ? snap.data() : null;
       if (prev && prev.visibility !== "public" && !owner) throw new ApiError(404, "This wishlist isn't available.");
-      const { state, changed } = reduce(prev, action, payload, { isOwner: owner, now: Date.now() });
+      const now = Date.now();
+      // "from" (a gifter's name) is validated by reduce but stored only in the private doc.
+      const { state, changed } = reduce(prev, action, payload, { isOwner: owner, now });
+      let priv = null;
+      if (touchesPrivate) {
+        const r = reducePrivate(ps.exists ? ps.data() : null, action, payload, { prevPublic: prev, nextPublic: state, publicChanged: changed, isOwner: owner, now, newId });
+        priv = r.priv;
+        if (r.changed) tx.set(privRef, r.priv);
+      }
       if (changed) tx.set(ref, { ...state, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-      return state;
+      return { state, priv };
     }, { maxAttempts: 3 });
 
-    res.json({ ok: true, data: publicView(result) });
+    // Gifter names go back only to the owner; guests get the public view only.
+    res.json({ ok: true, data: publicView(out.state), ...(owner && out.priv && { private: out.priv }) });
   } catch (e) {
     const status = e.status || 500;
     if (e.retryAfter) res.set("Retry-After", String(e.retryAfter));

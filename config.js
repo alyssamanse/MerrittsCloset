@@ -7,6 +7,8 @@
 
 export const CONFIG = {
   babyName: "Merritt",
+  // Who gifters are thanking (shown when they add their name to a claim).
+  ownerName: "Lys",
 
   // Shows the editing controls when this Google account signs in.
   // (Display only: the API function and Firestore rules do the real check.)
