@@ -166,9 +166,9 @@ const brandKey = (name) => {
 // Every action changes at most one document. Repeating an action is a no-op
 // (changed: false → no write), which makes client retries safe.
 const GUEST_ACTIONS = new Set(["claim", "unclaim"]);
-const OWNER_ACTIONS = new Set(["init", "setVisibility", "upsertBrand", "deleteBrand", "upsertItem", "deleteItem", "receive", "upsertPrint", "deletePrint", "upsertToy", "deleteToy", "setFavoriteStyles", "addType", "renameType", "deleteType", "resetClaim", "importBatch", "setColors", "setImages", "setPlan", "deletePlan", "setStock", "upsertFamilyItem", "deleteFamilyItem", "upsertStyleFav", "deleteStyleFav", "bulkCloset", "undoBulkDelete", "confirmSizes"]);
+const OWNER_ACTIONS = new Set(["init", "setVisibility", "upsertBrand", "deleteBrand", "upsertItem", "deleteItem", "receive", "upsertPrint", "deletePrint", "upsertToy", "deleteToy", "setFavoriteStyles", "addType", "renameType", "deleteType", "resetClaim", "importBatch", "setColors", "setImages", "setPlan", "deletePlan", "setStock", "upsertFamilyItem", "deleteFamilyItem", "upsertStyleFav", "deleteStyleFav", "bulkCloset", "undoBulkDelete", "confirmSizes", "hideItem", "showItem"]);
 
-function reduce(prev, action, payload, { isOwner, now }) {
+function reduce(prev, action, payload, { isOwner, now, priv = null }) {
   if (!GUEST_ACTIONS.has(action) && !OWNER_ACTIONS.has(action)) bad("Unknown action");
   if (OWNER_ACTIONS.has(action) && !isOwner) throw new ApiError(403, "Only the owner can do that.");
   if (!prev) {
@@ -337,6 +337,27 @@ function reduce(prev, action, payload, { isOwner, now }) {
       const next = { ...it, createdAt: existing?.createdAt ?? now };
       if (existing && JSON.stringify(existing) === JSON.stringify(next)) return same;
       state.items[it.id] = next;
+      break;
+    }
+    // Hidden ("still researching") wishlist items live in the owner-only private doc,
+    // so guests can't see them even by reading the raw public list.
+    case "hideItem": {
+      onlyKeys(p, ["id"], "payload");
+      const hid = id(p.id);
+      if (!state.items[hid]) return same;
+      if (state.claims[hid]?.h) bad("Someone already claimed this. Reset the claim first, then hide it.");
+      delete state.items[hid];
+      delete state.claims[hid];
+      break;
+    }
+    case "showItem": {
+      onlyKeys(p, ["id"], "payload");
+      const sid = id(p.id);
+      const d = priv?.drafts?.[sid];
+      if (!d || state.items[sid]) return same;
+      if (Object.keys(state.items).length >= LIMITS.items) bad(`You can have up to ${LIMITS.items} wishlist items`);
+      const { createdAt, ...rest } = d;
+      state.items[sid] = { ...cleanItem(rest), createdAt: createdAt ?? now };
       break;
     }
     case "deleteItem": {
@@ -636,12 +657,13 @@ class Limiter {
 // subcollections); only this API does, and only returns it to the owner.
 //   givers: { [itemId]: { from, at } }      name a gifter typed when claiming
 //   thanks: { [id]: { id, title, from, at, done } }  thank-you checklist
-const PRIVATE_ACTIONS = new Set(["getPrivate", "setThank", "deleteThank", "addThank"]);
+const PRIVATE_ACTIONS = new Set(["getPrivate", "setThank", "deleteThank", "addThank", "upsertDraft", "deleteDraft"]);
+const MAX_DRAFTS = 50;
 const MAX_THANKS = 200;
-const emptyPrivate = () => ({ givers: {}, thanks: {} });
+const emptyPrivate = () => ({ givers: {}, thanks: {}, drafts: {} });
 function reducePrivate(prevPriv, action, payload, { prevPublic, nextPublic, publicChanged, isOwner, now, newId }) {
   const priv = structuredClone(prevPriv || emptyPrivate());
-  priv.givers = priv.givers || {}; priv.thanks = priv.thanks || {};
+  priv.givers = priv.givers || {}; priv.thanks = priv.thanks || {}; priv.drafts = priv.drafts || {};
   const p = payload || {};
   const before = JSON.stringify(priv);
   const addThank = (title, from, itemId = "") => {
@@ -660,6 +682,15 @@ function reducePrivate(prevPriv, action, payload, { prevPublic, nextPublic, publ
     } else if (action === "deleteThank") {
       onlyKeys(p, ["id"], "payload");
       delete priv.thanks[id(p.id)];
+    } else if (action === "upsertDraft") {
+      onlyKeys(p, ["item"], "payload");
+      const it = cleanItem(p.item);
+      const cur = priv.drafts[it.id];
+      if (!cur && Object.keys(priv.drafts).length >= MAX_DRAFTS) bad(`Up to ${MAX_DRAFTS} hidden items`);
+      priv.drafts[it.id] = { ...it, createdAt: cur?.createdAt ?? now };
+    } else if (action === "deleteDraft") {
+      onlyKeys(p, ["id"], "payload");
+      delete priv.drafts[id(p.id)];
     } else if (action === "addThank") {
       onlyKeys(p, ["title", "from"], "payload");
       addThank(str(p.title, "Gift", 120, { required: true }), str(p.from, "From", 40, { required: true }));
@@ -671,6 +702,15 @@ function reducePrivate(prevPriv, action, payload, { prevPublic, nextPublic, publ
       if (from) priv.givers[iid] = { from, at: now }; else delete priv.givers[iid];
     } else if (action === "unclaim" || action === "resetClaim" || action === "deleteItem") {
       delete priv.givers[iid];
+    } else if (action === "hideItem") {
+      const rec = prevPublic?.items?.[iid];
+      if (rec) {
+        if (!priv.drafts[iid] && Object.keys(priv.drafts).length >= MAX_DRAFTS) bad(`Up to ${MAX_DRAFTS} hidden items`);
+        priv.drafts[iid] = rec;
+      }
+      delete priv.givers[iid];
+    } else if (action === "showItem") {
+      delete priv.drafts[iid];
     } else if (action === "receive" || action === "deleteFamilyItem") {
       // Gift arrived (or a family wish marked "Got it"): the name moves to the thank-you list.
       const g = priv.givers[iid];

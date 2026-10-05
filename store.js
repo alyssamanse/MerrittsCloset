@@ -10,7 +10,7 @@
 //   • Retries are capped (2) with backoff, only for transient errors, and every
 //     change is idempotent on the server, so a retry can't double a write.
 //   • Identical in-flight requests are merged (double taps send one request).
-import { CONFIG } from "./config.js?v=1005-0753";
+import { CONFIG } from "./config.js?v=1005-1126";
 
 const SDK = "https://www.gstatic.com/firebasejs/11.0.2";
 const CACHE_KEY = `closet:${CONFIG.wishlistId}`;
@@ -231,6 +231,10 @@ export async function createFirebaseStore() {
     undoBulkDelete: () => mutate("undoBulkDelete", {}),
     confirmSizes: () => mutate("confirmSizes", {}),
     setThank: (id, done) => mutate("setThank", { id, done }),
+    upsertDraft: (item) => mutate("upsertDraft", { item }),
+    deleteDraft: (id) => mutate("deleteDraft", { id }),
+    hideItem: (id) => mutate("hideItem", { id }),
+    showItem: (id) => mutate("showItem", { id }),
     deleteThank: (id) => mutate("deleteThank", { id }),
     addThank: (title, from) => mutate("addThank", { title, from }),
     deletePlan: (id) => mutate("deletePlan", { id }),
@@ -311,7 +315,7 @@ export function createDemoStore() {
   let user = null;
   let notify = () => {};
   // Owner-only private data (gifter names, thank-yous), like the server's private document.
-  const priv = { givers: { i3: { from: "Aunt Jen", at: now } }, thanks: { th1: { id: "th1", itemId: "", title: "Wooden Rattle", from: "Grandma Sue", at: now - 86400000 * 3, done: false } } };
+  const priv = { drafts: { d1: { id: "d1", category: "toy", title: "Wooden Play Kitchen", brand: "Hape", price: "$129", priority: "nice", image: img("#EADFD3", "#A7B8A0"), createdAt: now } }, givers: { i3: { from: "Aunt Jen", at: now } }, thanks: { th1: { id: "th1", itemId: "", title: "Wooden Rattle", from: "Grandma Sue", at: now - 86400000 * 3, done: false } } };
   const addThank = (title, from) => { const tid = `th${Math.random().toString(36).slice(2, 8)}`; priv.thanks[tid] = { id: tid, itemId: "", title, from, at: Date.now(), done: false }; };
   for (const b of Object.values(data.brands)) b.sizeAt = now;
   const firstBrand = Object.values(data.brands)[0]; if (firstBrand) firstBrand.sizeAt = now - 86400000 * 75; // shows the reminder
@@ -389,6 +393,10 @@ export function createDemoStore() {
     deleteFamilyItem: m((id) => { if (priv.givers[id]) { addThank(data.family[id]?.title || "A gift", priv.givers[id].from); delete priv.givers[id]; } delete data.family[id]; delete data.claims[id]; mine.delete(id); }),
     undoBulkDelete: m(() => { const t = data.trash; if (!t) return; for (const [k, r] of Object.entries(t.records)) if (!data[t.kind][k]) data[t.kind][k] = r; delete data.trash; }),
     confirmSizes: m(() => { for (const b of Object.values(data.brands)) b.sizeAt = Date.now(); }),
+    upsertDraft: m((it) => { priv.drafts[it.id] = { ...it, createdAt: priv.drafts[it.id]?.createdAt ?? Date.now() }; }),
+    deleteDraft: m((id) => { delete priv.drafts[id]; }),
+    hideItem: m((id) => { if (data.claims[id]?.h) throw new FriendlyError("Someone already claimed this. Reset the claim first, then hide it."); const it = data.items[id]; if (!it) return; priv.drafts[id] = it; delete data.items[id]; delete data.claims[id]; }),
+    showItem: m((id) => { const d = priv.drafts[id]; if (!d) return; data.items[id] = d; delete priv.drafts[id]; }),
     setThank: m((id, done) => { if (priv.thanks[id]) priv.thanks[id].done = done; }),
     deleteThank: m((id) => { delete priv.thanks[id]; }),
     addThank: m((title, from) => addThank(title, from)),

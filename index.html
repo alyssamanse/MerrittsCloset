@@ -495,6 +495,10 @@
   .favs .grid { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(132px, 40%); overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
   .favs .grid > * { scroll-snap-align: start; }
   @media (min-width: 560px) { .favs .grid { grid-auto-columns: minmax(150px, 24%); } }
+  /* Hidden-from-guests wishlist items (owner only) */
+  .card.draft { border-style: dashed; background: var(--paper); }
+  .card .ribbon.hidden-ribbon { color: var(--taupe); }
+  .hidden-note { margin: 0 0 10px; font-size: 13px; }
   /* Family page */
   .back-row { margin: -6px 0 4px; }
   .back-row .link { padding-left: 0; }
@@ -546,6 +550,6 @@
 </head>
 <body>
   <div id="app"></div>
-  <script type="module" src="app.js?v=1005-0753"></script>
+  <script type="module" src="app.js?v=1005-1126"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1005-0753";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1005-0753";
-const BUILD = "1005-0753"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1005-1126";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1005-1126";
+const BUILD = "1005-1126"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = ["wishlist", "closet", "sizes"];
@@ -261,7 +261,10 @@ function wishlistView() {
   const rest = openItems.filter((i) => !top.includes(i));
   const of = (c) => rest.filter((i) => catOf(i) === c);
   const soldOut = all.filter((i) => i.stock === "out" && !isClaimed(i.id)).length;
+  // Owner only: items hidden from guests while she's still deciding (kept in the private record).
+  const drafts = owner() ? list(S.private?.drafts).filter((i) => filter.wishlist === "all" || CAT_FILTER[catOf(i)] === filter.wishlist).sort(wlCompare) : [];
   const sections = [
+    wlSection("hidden", "Hidden From Guests", drafts, `<p class="muted hidden-note">Only you can see these. Tap Show to Guests when you're ready.</p>` + drafts.map((i) => itemCard(i, { draft: true })).join("")),
     wlSection("most", "Most Wanted", top, top.map((i) => itemCard(i, { inMost: true })).join("")),
     wlSection("clothes", "Clothes", of("clothes"), clothesInner(of("clothes"))),
     wlSection("toy", "Toys", of("toy"), of("toy").map((i) => itemCard(i)).join("")),
@@ -370,7 +373,7 @@ function closetMatch(i) {
   return list(S.data.prints).find((p) => brandKey(p.brand) === bk && (p.printName || "").trim().toLowerCase() === pn) || null;
 }
 const giverOf = (id) => S.private?.givers?.[id]?.from || "";
-function itemCard(i, { inMost = false } = {}) {
+function itemCard(i, { inMost = false, draft = false } = {}) {
   const claimed = isClaimed(i.id);
   const mine = S.mine.has(i.id);
   const toy = isToy(i);
@@ -394,7 +397,11 @@ function itemCard(i, { inMost = false } = {}) {
   const k = (a) => `${a}:${i.id}`;
 
   let actions;
-  if (owner()) {
+  if (draft) {
+    actions = `<span class="status taken">Only you can see this</span><span class="spacer"></span>
+      <button class="link" data-act="edit-draft" data-id="${i.id}">Edit</button>
+      <button class="btn small soft" data-act="show-item" data-id="${i.id}" ${dis(k("show"))}>${busy.has(k("show")) ? "Showing…" : "Show to Guests"}</button>`;
+  } else if (owner()) {
     actions = `
       ${claimed
         ? `<span class="status taken">${giverOf(i.id) ? `Claimed by ${esc(giverOf(i.id))}` : "Claimed"}</span><button class="link" data-act="reset" data-id="${i.id}" ${dis(k("reset"))}>${armedLabel(k("reset"), "Reset", "Tap again to reset")}</button>`
@@ -418,8 +425,8 @@ function itemCard(i, { inMost = false } = {}) {
     : "";
 
   return `
-    <article class="card ${claimed ? "claimed" : ""}" id="item-${i.id}">
-      ${i.priority === "most" && !claimed && !inMost ? `<span class="ribbon">Most Wanted</span>` : ""}
+    <article class="card ${claimed ? "claimed" : ""}${draft ? " draft" : ""}" id="item-${i.id}">
+      ${draft ? `<span class="ribbon hidden-ribbon">Hidden</span>` : i.priority === "most" && !claimed && !inMost ? `<span class="ribbon">Most Wanted</span>` : ""}
       ${link ? `<a href="${esc(link)}" target="_blank" rel="noopener noreferrer">${img(i.image, "thumb", i.title)}</a>` : img(i.image, "thumb", i.title)}
       <div class="card-body">
         <h3>${link ? `<a class="title-link" href="${esc(link)}" target="_blank" rel="noopener noreferrer">${esc(i.title || "Untitled")}</a>` : esc(i.title || "Untitled")}</h3>
@@ -429,7 +436,7 @@ function itemCard(i, { inMost = false } = {}) {
         ${i.notes ? `<div class="meta" style="margin-top:6px">${esc(i.notes)}</div>` : ""}
         <div class="card-links">
           ${link ? `<a class="link" href="${esc(link)}" target="_blank" rel="noopener noreferrer">View item ↗</a>` : ""}
-          <button class="link quiet" data-act="share-item" data-id="${i.id}">Share</button>
+          ${draft ? "" : `<button class="link quiet" data-act="share-item" data-id="${i.id}">Share</button>`}
         </div>
       </div>
       <div class="actions">${actions}</div>
@@ -1537,7 +1544,7 @@ function wireDelete(el, fn) {
 
 // One form for all four kinds of record. dest: wishlist | closet, cat: clothes | toy.
 // Fields carry data-show="wc wt cc ct" listing the combinations they appear in.
-function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, existing = null } = {}) {
+function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, existing = null, hidden = false } = {}) {
   const fromFilter = { toys: "toy", other: "other" }[filter[dest]] || "clothes";
   cat = cat || (existing ? catOf(existing) : fromFilter);
   const e = existing || {};
@@ -1599,6 +1606,9 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
     <div data-show="wc">
       <label class="check"><input type="checkbox" id="f-sizeflex" name="sizeFlexible" ${e.sizeFlexible ? "checked" : ""}> A bigger size is fine too</label>
       <label class="check"><input type="checkbox" id="f-printflex" name="printFlexible" ${e.printFlexible ? "checked" : ""}> Any print in this style is fine</label>
+    </div>
+    <div data-show="wc wt wo">
+      <label class="check"><input type="checkbox" id="f-hidden" name="hidden" ${hidden ? "checked" : ""}> Hide from guests for now <span class="muted">(still deciding)</span></label>
     </div>
     <div data-show="wc wt wo">
       <label class="f" for="f-notes">Note for gifters (optional)</label>
@@ -1674,7 +1684,7 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
     });
 
     el.querySelector('[data-act="cancel"]').addEventListener("click", () => closeSheet());
-    wireDelete(el, () => ({ cc: store.deletePrint, ct: store.deleteToy, co: store.deleteToy }[mode()] || store.deleteItem)(e.id));
+    wireDelete(el, () => ({ cc: store.deletePrint, ct: store.deleteToy, co: store.deleteToy }[mode()] || (hidden ? store.deleteDraft : store.deleteItem))(e.id));
     // The id is fixed when the sheet opens, so pressing Save again after a
     // failure updates the same record instead of creating a duplicate.
     const recordId = e.id || newId();
@@ -1698,7 +1708,16 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
             : { ...common, category: "other", title: v("title"), type: f("otherType").value };
         Object.assign(item, { price: v("price"), priority: f("priority").value, notes: v("notes") });
         if (!item.title) throw new Error("Give it a name first.");
-        await store.upsertItem(item);
+        const hide = f("hidden").checked;
+        if (hide) {
+          if (isEdit && !hidden) await store.hideItem(item.id); // move it off the public list first
+          await store.upsertDraft(item);
+        } else if (hidden) {
+          await store.upsertDraft(item);
+          await store.showItem(item.id);
+        } else await store.upsertItem(item);
+        if (hide) { if (!isEdit || !hidden) { tab = "wishlist"; history.replaceState(null, "", `${location.search}#wishlist`); } return isEdit && hidden ? "Saved" : "Saved, hidden from guests"; }
+        if (hidden) return "Now showing to guests";
       }
       if (!isEdit) {
         tab = dest;
@@ -1873,6 +1892,8 @@ $app.addEventListener("click", (ev) => {
     case "reset": if (confirmTap(`reset:${id}`)) act(`reset:${id}`, () => store.resetClaim(id), "Claim cleared"); return;
     case "receive": return act(`receive:${id}`, () => store.receive(id), isToy(S.data.items[id] || {}) ? "Moved to what she has" : "Moved to the closet");
     case "edit-item": return itemSheet({ dest: "wishlist", existing: S.data.items[id] });
+    case "edit-draft": return itemSheet({ dest: "wishlist", existing: S.private?.drafts?.[id], hidden: true });
+    case "show-item": return act(`show:${id}`, () => store.showItem(id), "Now showing to guests");
     case "edit-print": return itemSheet({ dest: "closet", cat: "clothes", existing: S.data.prints[id] });
     case "edit-toy": return itemSheet({ dest: "closet", cat: hasCat(S.data.toys[id] || {}), existing: S.data.toys[id] });
     case "add": return tab === "family" ? familySheet() : tab === "sizes" ? brandSheet() : itemSheet();

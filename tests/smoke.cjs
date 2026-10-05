@@ -36,6 +36,10 @@ const openSheet = async (p, sel, expectTitle) => {
 
   console.log("Guest");
   const g = await page(browser, "?demo");
+  await step("guests never see hidden items", async () => {
+    must(await g.locator(".wl-fold[data-wl=hidden]").count() === 0, "hidden section shown to a guest");
+    must(!(await g.locator("main").innerText()).includes("Wooden Play Kitchen"), "hidden item visible to a guest");
+  });
   await step("wishlist shows sections", async () => {
     must(await g.locator(".wl-fold[data-wl=most] .card").count() > 0, "no Most Wanted cards");
     must(await g.locator(".wl-fold[data-wl=claimed]").count() === 1, "no Already Claimed section");
@@ -100,6 +104,20 @@ const openSheet = async (p, sel, expectTitle) => {
     await o.locator('.wl-fold[data-wl=claimed] > summary').click();
     await o.locator('#item-i3 [data-act=receive]').click(); await o.waitForTimeout(600);
     must((await o.locator(".thanks").textContent()).includes("Aunt Jen"), "no thank-you for Aunt Jen");
+  });
+  await step("hide and show wishlist items", async () => {
+    await tab(o, "wishlist");
+    must(await o.locator(".wl-fold[data-wl=hidden] .card.draft").count() === 1, "owner doesn't see the hidden item");
+    // hide a public item from its Edit form
+    const card = o.locator(".wl-fold[data-wl=toy] .card").first();
+    const title = (await card.locator("h3").innerText()).trim();
+    await card.locator("[data-act=edit-item]").click(); await o.waitForTimeout(250);
+    await o.check("#f-hidden"); await o.click('.sheet-bg [data-act="save"]'); await o.waitForTimeout(700);
+    must((await o.locator(".wl-fold[data-wl=hidden]").innerText()).includes(title), `"${title}" didn't move to Hidden`);
+    // show it again
+    await o.locator(".wl-fold[data-wl=hidden] .card", { hasText: title }).locator("[data-act=show-item]").click(); await o.waitForTimeout(700);
+    must(!(await o.locator(".wl-fold[data-wl=hidden]").innerText()).includes(title), "still hidden after Show to Guests");
+    must(await o.locator(`.wl-fold:not([data-wl=hidden]) .card:has-text("${title}")`).count() === 1, "not back on the list");
   });
   await step("wishlist forms", async () => { await openSheet(o, "[data-act=add]", "Add"); await openSheet(o, "[data-act=add-thank]", "Thank"); });
   await step("closet: bulk delete and undo", async () => {

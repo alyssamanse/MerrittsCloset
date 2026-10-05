@@ -183,7 +183,7 @@ functions.http("api", async (req, res) => {
         if (changed) tx.set(privRef, next);
         return next;
       }, { maxAttempts: 3 });
-      return res.json({ ok: true, private: priv || { givers: {}, thanks: {} } });
+      return res.json({ ok: true, private: priv || { givers: {}, thanks: {}, drafts: {} } });
     }
 
     if (GUEST_ACTIONS.has(action)) limit("guest-writes", RATES.guestWrites);
@@ -195,7 +195,7 @@ functions.http("api", async (req, res) => {
     // The wishlist id comes from server config, never from the request,
     // so a caller cannot point this at any other document.
     // Only actions that can touch gifter names read the private doc.
-    const touchesPrivate = ["claim", "unclaim", "resetClaim", "deleteItem", "receive", "deleteFamilyItem"].includes(action);
+    const touchesPrivate = ["claim", "unclaim", "resetClaim", "deleteItem", "receive", "deleteFamilyItem", "hideItem", "showItem"].includes(action);
     const out = await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const ps = touchesPrivate ? await tx.get(privRef) : null;
@@ -203,10 +203,11 @@ functions.http("api", async (req, res) => {
       if (prev && prev.visibility !== "public" && !owner) throw new ApiError(404, "This wishlist isn't available.");
       const now = Date.now();
       // "from" (a gifter's name) is validated by reduce but stored only in the private doc.
-      const { state, changed } = reduce(prev, action, payload, { isOwner: owner, now });
+      const prevPriv = ps?.exists ? ps.data() : null;
+      const { state, changed } = reduce(prev, action, payload, { isOwner: owner, now, priv: prevPriv });
       let priv = null;
       if (touchesPrivate) {
-        const r = reducePrivate(ps.exists ? ps.data() : null, action, payload, { prevPublic: prev, nextPublic: state, publicChanged: changed, isOwner: owner, now, newId });
+        const r = reducePrivate(prevPriv, action, payload, { prevPublic: prev, nextPublic: state, publicChanged: changed, isOwner: owner, now, newId });
         priv = r.priv;
         if (r.changed) tx.set(privRef, r.priv);
       }
