@@ -4,7 +4,7 @@
 const crypto = require("crypto");
 
 const LIMITS = {
-  items: 150, prints: 400, brands: 40, toys: 200, family: 150, // hard caps on stored records
+  items: 150, prints: 400, brands: 40, toys: 200, family: 150, styleFavs: 60, // hard caps on stored records
   docBytes: 800_000,                     // Firestore's own limit is ~1 MiB
   activeClaimsPerKey: 15,                // one browser can't claim the whole list
   claimCooldownMs: 3_000,                // an item's claim can't flip faster than this
@@ -57,6 +57,7 @@ const BRAND_FIELDS = ["id", "name", "currentSize", "notes"];
 const ITEM_FIELDS = ["id", "category", "title", "brand", "printName", "type", "ageRange", "size", "price", "priority", "sizeFlexible", "printFlexible", "notes", "url", "image"];
 const TOY_FIELDS = ["id", "category", "name", "brand", "type", "url", "image"]; // "Toys she has" and "Other things she has"
 const FAMILY_FIELDS = ["id", "person", "category", "title", "brand", "sizes", "price", "priority", "notes", "url", "image"];
+const STYLE_FAV_FIELDS = ["id", "brand", "name", "url", "image"]; // "Favorite Styles": a specific product she loves
 const PRINT_FIELDS = ["id", "brand", "printName", "types", "favorite", "outgrown", "url", "image"];
 
 // Product types ("Zippy", "Dress"…) shown as pills on closet prints. Max 8 per print.
@@ -114,6 +115,10 @@ function cleanToy(t) {
   if (!["toy", "other"].includes(category)) bad("Category must be toy or other");
   return { id: id(t.id), category, name: str(t.name, "Name", 120, { required: true }), brand: str(t.brand, "Brand", 60), type: str(t.type, "Toy type", 24), url: url(t.url, "Link"), image: url(t.image, "Image") };
 }
+function cleanStyleFav(f) {
+  onlyKeys(f, STYLE_FAV_FIELDS, "style");
+  return { id: id(f.id), brand: str(f.brand, "Brand", 60), name: str(f.name, "Style name", 80, { required: true }), url: url(f.url, "Link"), image: url(f.image, "Image") };
+}
 function cleanPrint(p) {
   onlyKeys(p, PRINT_FIELDS, "print");
   const out = { id: id(p.id), brand: str(p.brand, "Brand", 60), printName: str(p.printName, "Print", 80), types: types(p.types), favorite: bool(p.favorite, "favorite"), outgrown: bool(p.outgrown, "outgrown"), url: url(p.url, "Link"), image: url(p.image, "Image") };
@@ -160,7 +165,7 @@ const brandKey = (name) => {
 // Every action changes at most one document. Repeating an action is a no-op
 // (changed: false → no write), which makes client retries safe.
 const GUEST_ACTIONS = new Set(["claim", "unclaim"]);
-const OWNER_ACTIONS = new Set(["init", "setVisibility", "upsertBrand", "deleteBrand", "upsertItem", "deleteItem", "receive", "upsertPrint", "deletePrint", "upsertToy", "deleteToy", "setFavoriteStyles", "addType", "renameType", "deleteType", "resetClaim", "importBatch", "setColors", "setImages", "setPlan", "deletePlan", "setStock", "upsertFamilyItem", "deleteFamilyItem", "bulkCloset"]);
+const OWNER_ACTIONS = new Set(["init", "setVisibility", "upsertBrand", "deleteBrand", "upsertItem", "deleteItem", "receive", "upsertPrint", "deletePrint", "upsertToy", "deleteToy", "setFavoriteStyles", "addType", "renameType", "deleteType", "resetClaim", "importBatch", "setColors", "setImages", "setPlan", "deletePlan", "setStock", "upsertFamilyItem", "deleteFamilyItem", "upsertStyleFav", "deleteStyleFav", "bulkCloset"]);
 
 function reduce(prev, action, payload, { isOwner, now }) {
   if (!GUEST_ACTIONS.has(action) && !OWNER_ACTIONS.has(action)) bad("Unknown action");
@@ -170,7 +175,7 @@ function reduce(prev, action, payload, { isOwner, now }) {
     return { state: emptyState(), changed: true };
   }
   const state = structuredClone(prev);
-  for (const k of ["brands", "items", "prints", "toys", "claims", "family"]) state[k] = state[k] || {};
+  for (const k of ["brands", "items", "prints", "toys", "claims", "family", "styleFavs"]) state[k] = state[k] || {};
   const p = payload || {};
   const same = { state: prev, changed: false };
 
@@ -255,6 +260,23 @@ function reduce(prev, action, payload, { isOwner, now }) {
       if (!state.family[id(p.id)]) return same;
       delete state.family[p.id];
       delete state.claims[p.id];
+      break;
+    }
+
+    case "upsertStyleFav": {
+      onlyKeys(p, ["style"], "payload");
+      const f = cleanStyleFav(p.style);
+      const existing = state.styleFavs[f.id];
+      if (!existing && Object.keys(state.styleFavs).length >= LIMITS.styleFavs) bad(`Up to ${LIMITS.styleFavs} favorite styles`);
+      const next = { ...f, createdAt: existing?.createdAt ?? now };
+      if (existing && JSON.stringify(existing) === JSON.stringify(next)) return same;
+      state.styleFavs[f.id] = next;
+      break;
+    }
+    case "deleteStyleFav": {
+      onlyKeys(p, ["id"], "payload");
+      if (!state.styleFavs[id(p.id)]) return same;
+      delete state.styleFavs[p.id];
       break;
     }
 
@@ -555,7 +577,7 @@ function reduce(prev, action, payload, { isOwner, now }) {
 }
 
 // What readers get back from the API. Matches what the Firestore document holds.
-const publicView = (s) => s && { v: s.v, visibility: s.visibility, brands: s.brands, items: s.items, prints: s.prints, toys: s.toys || {}, claims: s.claims, favoriteStyles: s.favoriteStyles || [], typeLists: s.typeLists || {}, ...(s.colors && { colors: s.colors }), plans: s.plans || [], family: s.family || {} };
+const publicView = (s) => s && { v: s.v, visibility: s.visibility, brands: s.brands, items: s.items, prints: s.prints, toys: s.toys || {}, claims: s.claims, favoriteStyles: s.favoriteStyles || [], typeLists: s.typeLists || {}, ...(s.colors && { colors: s.colors }), plans: s.plans || [], family: s.family || {}, styleFavs: s.styleFavs || {} };
 
 // ── rate limiting (in memory) ───────────────────────────────────────
 // Token buckets. The function runs with max instances = 1, so one process

@@ -473,3 +473,18 @@ test("bulkCloset: owner-only, validated, one write for many prints", async () =>
   const d = await call("bulkCloset", { kind: "prints", ids: ["bulk_print_02", "bulk_print_03", "not_there_99"], op: "delete" }, o);
   assert.ok(!d.body.data.prints.bulk_print_02 && !d.body.data.prints.bulk_print_03 && d.body.data.prints.bulk_print_01);
 });
+
+test("favorite styles: owner only, strict fields, capped", () => {
+  const { reduce } = require("../logic");
+  const ctx = { isOwner: true, now: 1 };
+  let { state } = reduce(null, "init", {}, ctx);
+  const style = { id: "sf_00000001", brand: "Kyte Baby", name: "Bamboo Zip Romper", url: "https://kytebaby.com/x", image: "https://cdn.shopify.com/a.jpg" };
+  ({ state } = reduce(state, "upsertStyleFav", { style }, ctx));
+  assert.equal(state.styleFavs.sf_00000001.name, "Bamboo Zip Romper");
+  assert.throws(() => reduce(state, "upsertStyleFav", { style: { ...style, id: "sf_00000002" } }, { isOwner: false, now: 1 }), /owner/i);
+  assert.throws(() => reduce(state, "upsertStyleFav", { style: { ...style, price: "$1" } }, ctx));
+  assert.throws(() => reduce(state, "upsertStyleFav", { style: { ...style, name: "" } }, ctx));
+  assert.throws(() => reduce(state, "upsertStyleFav", { style: { ...style, url: "javascript:alert(1)" } }, ctx));
+  ({ state } = reduce(state, "deleteStyleFav", { id: "sf_00000001" }, ctx));
+  assert.deepEqual(state.styleFavs, {});
+});

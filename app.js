@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1004-1858";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1004-1858";
-const BUILD = "1004-1858"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1005-0241";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1005-0241";
+const BUILD = "1005-0241"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = ["wishlist", "closet", "sizes"];
@@ -423,41 +423,92 @@ function clothesView(prints) {
     ${shown.length ? printGroups(shown, { forceOpen: filter.fit !== "all" }) : `<div class="empty">${prints.length ? "Nothing here." : "No clothes listed yet."}</div>`}`;
 }
 
+// Her Favorites: tiles of her favorite prints, then the specific styles she loves
+// (added by hand: brand, style name, photo, link to the product).
 function favoritesView(prints) {
-  const favPrints = prints.filter((p) => p.favorite).sort((a, b) => !!b.outgrown - !!a.outgrown || (a.printName || "").localeCompare(b.printName || ""));
-  const favStyles = S.data.favoriteStyles || [];
-  if (!favPrints.length && !favStyles.length) {
+  const favPrints = prints.filter((p) => p.favorite).sort((a, b) => !!a.outgrown - !!b.outgrown || (a.printName || "").localeCompare(b.printName || ""));
+  const styles = list(S.data.styleFavs).sort((a, b) => brandKey(a.brand).localeCompare(brandKey(b.brand)) || (a.name || "").localeCompare(b.name || ""));
+  if (!favPrints.length && !styles.length) {
     return owner()
-      ? `<div class="favs empty-favs"><b>Her Favorites</b><span class="muted">Tap a print and turn on ★ Favorite print, or </span><button class="link" data-act="edit-favstyles">pick favorite styles</button></div>`
+      ? `<div class="favs empty-favs"><b>Her Favorites</b><span class="muted">Tap a print and turn on ★ Favorite print, or </span><button class="link" data-act="add-stylefav">add a favorite style</button></div>`
       : "";
   }
-  const hasStyle = (style) => prints.filter((p) => !p.outgrown && (p.types || []).some((t) => t.toLowerCase() === style.toLowerCase()));
+  const meta = [favPrints.length && `${favPrints.length} ${favPrints.length === 1 ? "Print" : "Prints"}`, styles.length && `${styles.length} ${styles.length === 1 ? "Style" : "Styles"}`].filter(Boolean).join(" · ");
   return `
     <details class="favs" data-favs ${favsOpen ? "open" : ""}>
-      <summary class="favs-head"><h2>★ Her Favorites</h2><span class="brand-meta">${[favPrints.length && `${favPrints.length} ${favPrints.length === 1 ? "Print" : "Prints"}`, favStyles.length && `${favStyles.length} ${favStyles.length === 1 ? "Style" : "Styles"}`].filter(Boolean).join(" · ")}</span><span class="chev" aria-hidden="true"></span></summary>
-      ${owner() ? `<div class="favs-edit"><button class="link" data-act="edit-favstyles">Edit Styles</button></div>` : ""}
+      <summary class="favs-head"><h2>★ Her Favorites</h2><span class="brand-meta">${meta}</span><span class="chev" aria-hidden="true"></span></summary>
       <p class="muted">Great gift ideas: a new style in a print she loves, or a style she loves in a print she doesn't have yet.</p>
-      ${favPrints.map((p) => `
-        <div class="fav-row">
-          ${img(p.image, "fav-thumb", p.printName)}
-          <div>
-            <strong>${esc(p.printName || "Untitled print")}</strong>${p.brand ? `<span class="muted"> · ${esc(p.brand)}</span>` : ""}
-            <div class="fav-line">${p.outgrown
-              ? `<i class="pill og">Outgrown</i> Loved it and outgrew it. Any style in a bigger size is welcome!`
-              : (p.types || []).length ? `Has it as ${esc(p.types.join(", "))}. Any other style is welcome!` : "Any style in this print is welcome!"}</div>
-          </div>
-        </div>`).join("")}
-      ${favStyles.map((style) => {
-        const have = hasStyle(style);
-        return `
-        <div class="fav-row">
-          <span class="fav-style">${esc(style)}</span>
-          <div class="fav-line">${have.length
-            ? `Loves these! Already has them in ${esc(have.map((p) => p.printName || "an untitled print").join(", "))}. Any other print is welcome.`
-            : "Loves these, in any print!"}</div>
-        </div>`;
-      }).join("")}
+      ${favPrints.length ? `<h3 class="favs-sub">Favorite Prints</h3>
+      <div class="grid">${favPrints.map((p) => tile(p, "edit-print", p.printName || "Untitled print", p.types || [], p.brand)).join("")}</div>` : ""}
+      ${styles.length || owner() ? `<div class="favs-sub-row"><h3 class="favs-sub">Favorite Styles</h3>${owner() ? `<button class="link" data-act="add-stylefav">+ Add Style</button>` : ""}</div>` : ""}
+      ${styles.length ? `<div class="grid">${styles.map(styleTile).join("")}</div>` : owner() ? `<p class="muted">Add a style she loves, like a brand's zip romper, with a photo and a link to it.</p>` : ""}
     </details>`;
+}
+function styleTile(f) {
+  const link = safeUrl(f.url) && !f.url.startsWith("data:") ? f.url : "";
+  const pic = img(f.image, "", f.name);
+  const cap = `<span>${esc(f.name)}${f.brand ? `<small>${esc(f.brand)}</small>` : ""}${link ? `<small class="ext">View ↗</small>` : ""}</span>`;
+  const open = (cls, label, inner) => link
+    ? `<a class="${cls}" href="${esc(link)}" target="_blank" rel="noopener noreferrer"${label}>${inner}</a>`
+    : `<div class="${cls}">${inner}</div>`;
+  return `<div class="print style-fav">
+    ${open("tile-img", ` aria-label="Open ${esc(f.name)} in a new tab"`, pic)}
+    ${open("tile-cap", "", cap)}
+    ${owner() ? `<button class="link style-edit" data-act="edit-stylefav" data-id="${f.id}">Edit</button>` : ""}
+  </div>`;
+}
+function styleFavSheet(existing = null) {
+  const e = existing || {};
+  const id = e.id || newId();
+  openSheet(
+    `<h2>${existing ? "Edit Favorite Style" : "Add a Favorite Style"}</h2>
+     <label class="f" for="sf-url">Product link</label>
+     <div class="import"><input class="in" id="sf-url" maxlength="600" value="${esc(e.url || "")}" placeholder="Paste a link to the product" inputmode="url" /><button class="btn small" data-m="fill">Fill in</button></div>
+     <div class="err" id="sf-import-err" hidden></div>
+     <div class="preview"><img id="sf-pv" src="${esc(safeUrl(e.image) || PLACEHOLDER)}" alt="" referrerpolicy="no-referrer" onerror="this.src='${PLACEHOLDER}'"><span class="muted">The photo comes from the link, or paste an image address below.</span></div>
+     <label class="f" for="sf-name">Style name</label><input class="in" id="sf-name" maxlength="80" value="${esc(e.name || "")}" placeholder="Bamboo Zip Romper" />
+     <label class="f" for="sf-brand">Brand</label><input class="in" id="sf-brand" maxlength="60" list="dl-brands" value="${esc(e.brand || "")}" placeholder="Kyte Baby" />
+     <datalist id="dl-brands">${brandOptions()}</datalist>
+     <label class="f" for="sf-image">Image address</label><input class="in" id="sf-image" maxlength="600" value="${esc(e.image || "")}" placeholder="https://…" />
+     <div class="err sheet-err" hidden></div>
+     <div class="sheet-actions">
+       ${existing ? `<button class="link danger" data-act="delete">Delete</button>` : ""}
+       <span class="spacer"></span>
+       <button class="btn ghost" data-act="cancel">Cancel</button>
+       <button class="btn" data-act="save">Save</button>
+     </div>`,
+    (el) => {
+      const $ = (sel) => el.querySelector(sel);
+      const showPic = () => ($("#sf-pv").src = safeUrl($("#sf-image").value.trim()) || PLACEHOLDER);
+      $("#sf-image").addEventListener("change", showPic);
+      const fill = $('[data-m="fill"]');
+      fill.addEventListener("click", async () => {
+        if (fill.disabled) return;
+        const errEl = $("#sf-import-err"); errEl.hidden = true;
+        const url = $("#sf-url").value.trim();
+        if (!/^https?:\/\//i.test(url)) { errEl.textContent = "Paste a full link starting with https://"; errEl.hidden = false; return; }
+        fill.disabled = true; fill.textContent = "Reading…";
+        try {
+          const r = await store.importLink(url);
+          const put = (sel, v) => { if (v && !$(sel).value) $(sel).value = v; };
+          put("#sf-name", r.title); put("#sf-brand", r.brand ? brandByName(r.brand)?.name || r.brand : "");
+          if (r.image) { $("#sf-image").value = r.image; showPic(); }
+          if (!r.title && !r.image) throw new Error("That store didn't share any details. Fill them in below.");
+          if (r.fromArchive) toast("That page is gone, so this came from a saved copy");
+        } catch (err) { errEl.textContent = err.message; errEl.hidden = false; }
+        finally { fill.disabled = false; fill.textContent = "Fill in"; }
+      });
+      $('[data-act="cancel"]').addEventListener("click", () => closeSheet());
+      wireDelete(el, () => store.deleteStyleFav(id));
+      wireSave(el, async () => {
+        const name = $("#sf-name").value.trim();
+        if (!name) throw new Error("Give the style a name.");
+        await store.upsertStyleFav({ id, name, brand: $("#sf-brand").value.trim(), url: $("#sf-url").value.trim(), image: $("#sf-image").value.trim() });
+        favsOpen = true;
+        return "Saved";
+      });
+    }
+  );
 }
 
 function favStylesSheet() {
@@ -1648,6 +1699,8 @@ $app.addEventListener("click", (ev) => {
       for (const d of document.querySelectorAll(".brand-fold")) { d.open = t.dataset.open === "1"; if (d.open) openBrands.add(d.dataset.brand); else openBrands.delete(d.dataset.brand); }
       return;
     case "edit-favstyles": return favStylesSheet();
+    case "add-stylefav": return styleFavSheet();
+    case "edit-stylefav": return styleFavSheet(S.data.styleFavs?.[id]);
     case "edit-brand": return brandSheet(S.data.brands[id]);
     case "refresh": return act("refresh", async () => { if (!(await store.refresh())) toast("Already up to date"); });
     case "signin": return act("signin", () => store.signInOwner());

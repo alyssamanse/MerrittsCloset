@@ -10,7 +10,7 @@
 //   • Retries are capped (2) with backoff, only for transient errors, and every
 //     change is idempotent on the server, so a retry can't double a write.
 //   • Identical in-flight requests are merged (double taps send one request).
-import { CONFIG } from "./config.js?v=1004-1858";
+import { CONFIG } from "./config.js?v=1005-0241";
 
 const SDK = "https://www.gstatic.com/firebasejs/11.0.2";
 const CACHE_KEY = `closet:${CONFIG.wishlistId}`;
@@ -216,6 +216,8 @@ export async function createFirebaseStore() {
     setColors: (colors) => mutate("setColors", { colors }),
     setPlan: (plan) => mutate("setPlan", { plan }),
     upsertFamilyItem: (item) => mutate("upsertFamilyItem", { item }),
+    upsertStyleFav: (style) => mutate("upsertStyleFav", { style }),
+    deleteStyleFav: (id) => mutate("deleteStyleFav", { id }),
     bulkCloset: (kind, ids, op) => mutate("bulkCloset", { kind, ids, op }),
     deleteFamilyItem: (id) => mutate("deleteFamilyItem", { id }),
     deletePlan: (id) => mutate("deletePlan", { id }),
@@ -266,6 +268,10 @@ export function createDemoStore() {
       t3: { id: "t3", name: "Bunny Lovey", brand: "Jellycat", type: "Plush", image: img("#F8E3E1", "#FFFFFF") },
     },
     favoriteStyles: ["Zippy", "Two-piece PJs"],
+    styleFavs: {
+      s1: { id: "s1", brand: "Kyte Baby", name: "Bamboo Zip Romper", url: "https://example.com/products/zip-romper", image: img("#F3DCD9", "#C98F95") },
+      s2: { id: "s2", brand: "Little Sleepies", name: "Two-Piece Bamboo PJ Set", url: "https://example.com/products/pj-set", image: img("#E3E6D3", "#8E9A6F") },
+    },
     family: {
       f1: { id: "f1", person: "Lys", category: "clothes", title: "Linen Button-Down Shirt", brand: "Madewell", sizes: ["S"], price: "$88", priority: "most", url: "https://example.com/products/linen-shirt", image: img("#EADFD3", "#FFFFFF") },
       f2: { id: "f2", person: "Michael", category: "clothes", title: "Performance Quarter-Zip", brand: "Vuori", sizes: ["L", "Tall"], price: "$98", priority: "nice", image: img("#DDE3E8", "#FFFFFF") },
@@ -356,6 +362,8 @@ export function createDemoStore() {
         else if (op === "outgrown") r.outgrown = true; else if (op === "fits") r.outgrown = false;
       }
     }),
+    upsertStyleFav: m((f) => { data.styleFavs = data.styleFavs || {}; data.styleFavs[f.id] = { ...f, createdAt: data.styleFavs[f.id]?.createdAt ?? Date.now() }; }),
+    deleteStyleFav: m((id) => { delete data.styleFavs?.[id]; }),
     upsertFamilyItem: m((it) => { data.family = data.family || {}; data.family[it.id] = { ...it, createdAt: data.family[it.id]?.createdAt ?? Date.now() }; }),
     deleteFamilyItem: m((id) => { delete data.family[id]; delete data.claims[id]; mine.delete(id); }),
     setPlan: m((plan) => { data.plans = [...(data.plans || []).filter((p) => p.id !== plan.id), plan]; }),
