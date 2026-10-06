@@ -10,7 +10,7 @@
 //   • Retries are capped (2) with backoff, only for transient errors, and every
 //     change is idempotent on the server, so a retry can't double a write.
 //   • Identical in-flight requests are merged (double taps send one request).
-import { CONFIG } from "./config.js?v=1005-1126";
+import { CONFIG } from "./config.js?v=1006-0246";
 
 const SDK = "https://www.gstatic.com/firebasejs/11.0.2";
 const CACHE_KEY = `closet:${CONFIG.wishlistId}`;
@@ -260,7 +260,7 @@ export function createDemoStore() {
     v: 1, visibility: "public",
     brands: {
       b1: { id: "b1", name: "Kyte Baby", currentSize: "6–12M", notes: "Zippers only, please" },
-      b2: { id: "b2", name: "Little Sleepies", currentSize: "6–12M", notes: "" },
+      b2: { id: "b2", name: "Little Sleepies", currentSize: "", notes: "", styleSizes: [{ style: "Zippy", size: "3–6M" }, { style: "Shorty & daywear", size: "6–12M" }] },
       b3: { id: "b3", name: "Posh Peanut", currentSize: "9–12M", notes: "Runs small, size up" },
     },
     items: {
@@ -412,7 +412,7 @@ export function createDemoStore() {
       for (const id of ids) { const it = data.items[id]; if (it) { it.stock = it.id === "i1" ? "out" : "in"; it.stockAt = Date.now(); if (it.stock === "out") found++; } }
       emit(); return { found };
     },
-    upsertBrand: m((b) => { const cur = data.brands[b.id]; data.brands[b.id] = { ...b, sizeAt: cur && cur.currentSize === b.currentSize ? cur.sizeAt : Date.now() }; }),
+    upsertBrand: m((b) => { const cur = data.brands[b.id]; const same = cur && cur.currentSize === b.currentSize && JSON.stringify(cur.styleSizes || []) === JSON.stringify(b.styleSizes || []); data.brands[b.id] = { ...b, sizeAt: same ? cur.sizeAt : Date.now() }; }),
     deleteBrand: m((id) => { delete data.brands[id]; }),
     async importLink(url) {
       await new Promise((r) => setTimeout(r, 500));

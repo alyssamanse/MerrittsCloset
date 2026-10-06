@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1005-1126";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1005-1126";
-const BUILD = "1005-1126"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1006-0246";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1006-0246";
+const BUILD = "1006-0246"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = ["wishlist", "closet", "sizes"];
@@ -388,7 +388,7 @@ function itemCard(i, { inMost = false, draft = false } = {}) {
     : [
         i.type && `<span class="chip ink">${esc(i.type)}</span>`,
         i.size && `<span class="chip">Size ${esc(i.size)}</span>`,
-        !i.size && brand?.currentSize && `<span class="chip">${esc(brand.currentSize)} or bigger</span>`,
+        !i.size && sizeForStyle(brand, i.type, i.title) && `<span class="chip">${esc(sizeForStyle(brand, i.type, i.title))} or bigger</span>`,
         i.sizeFlexible && `<span class="chip moss">Bigger size OK</span>`,
         i.printFlexible && `<span class="chip moss">Any print OK</span>`,
         i.price && `<span class="chip tan">${esc(i.price)}</span>`,
@@ -545,7 +545,7 @@ function printGroups(prints, { forceOpen = false } = {}) {
     const ps = groups.get(gk).sort((a, b) => !!a.outgrown - !!b.outgrown || (a.printName || "").localeCompare(b.printName || ""));
     return `
       <details class="brand-fold" data-brand="${esc(n)}" ${allOpen || openBrands.has(n) ? "open" : ""}>
-        <summary class="brand-head"><h2>${b ? `<span class="fav-mark" aria-label="Favorite brand">★</span> ` : ""}${esc(n)}</h2><span class="brand-meta">${ps.length} ${ps.length === 1 ? "Print" : "Prints"}${b?.currentSize ? ` · Wears ${esc(b.currentSize)}` : ""}</span><span class="chev" aria-hidden="true"></span></summary>
+        <summary class="brand-head"><h2>${b ? `<span class="fav-mark" aria-label="Favorite brand">★</span> ` : ""}${esc(n)}</h2><span class="brand-meta">${ps.length} ${ps.length === 1 ? "Print" : "Prints"}${hasSize(b) ? ` · Wears ${esc(wearsText(b))}` : ""}</span><span class="chev" aria-hidden="true"></span></summary>
         ${selectMode ? `<div class="pick-all"><button class="link" data-act="pick-all" data-ids="${ps.map((p) => p.id).join(",")}">${ps.every((p) => picked.has(p.id)) ? "Clear" : "Select All"} ${esc(n)}</button></div>` : ""}
         <div class="grid">
           ${ps.map((p) => tile(p, "edit-print", (p.favorite ? "★ " : "") + (p.printName || "Untitled print"), p.types || [])).join("")}
@@ -705,6 +705,27 @@ function tile(rec, editAct, title, pills, sub = "") {
   return `<div class="${cls}"${label}>${hasPhoto ? zoom : img(rec.image, "", title)}${caption}</div>`;
 }
 
+// Which size she wears for an item: a matching "size by style" row, else the brand's main size.
+// Mirrors sizeForStyle in functions/logic.js. "Shorty & daywear" matches a Shorty or a Two-piece daywear.
+function sizeForStyle(brand, type, title) {
+  const rows = brand?.styleSizes || [];
+  const t = String(type || "").toLowerCase().trim();
+  const hay = `${t} ${String(title || "").toLowerCase()}`;
+  const parts = (r) => r.style.toLowerCase().split(/\s*(?:,|&|\/|\+|\band\b)\s*/).map((x) => x.trim()).filter(Boolean);
+  const hit = rows.find((r) => r.style.toLowerCase().trim() === t) ||
+    rows.find((r) => hay.includes(r.style.toLowerCase().trim())) ||
+    rows.find((r) => parts(r).some((w) => hay.includes(w)));
+  return hit ? hit.size : brand?.currentSize || "";
+}
+// Every size she wears in a brand, smallest first ("3–6M & 6–12M").
+const wearsText = (b) => {
+  const all = [...new Set([b?.currentSize, ...(b?.styleSizes || []).map((r) => r.size)].filter(Boolean))];
+  const rank = (z) => { const i = [...CLOTHING_SIZES, ...SHOE_SIZES].indexOf(z); return i < 0 ? 99 : i; };
+  const sorted = all.sort((a, c) => rank(a) - rank(c));
+  return sorted.length > 2 ? `${sorted[0]} to ${sorted[sorted.length - 1]}` : sorted.join(" & ");
+};
+const hasSize = (b) => !!(b?.currentSize || (b?.styleSizes || []).length);
+
 function sizesView() {
   const bs = brands();
   return `
@@ -715,8 +736,12 @@ function sizesView() {
     ${bs.length
       ? bs.map((b) => `
       <div class="size-row${owner() && sizeStale(b) ? " stale" : ""}">
-        <div class="name"><strong>${esc(b.name)}</strong>${b.notes ? `<span class="muted">${esc(b.notes)}</span>` : ""}${owner() && b.sizeAt && b.currentSize ? `<span class="muted size-age">Size set ${ago(b.sizeAt)}</span>` : ""}</div>
-        <div class="size-badge">${esc(b.currentSize || "—")}<small>${b.currentSize ? "or bigger" : "size not set"}</small></div>
+        <div class="name"><strong>${esc(b.name)}</strong>${b.notes ? `<span class="muted">${esc(b.notes)}</span>` : ""}
+          ${(b.styleSizes || []).length ? `<div class="style-sizes">${b.styleSizes.map((r) => `<span class="chip"><b>${esc(r.style)}</b> ${esc(r.size)}</span>`).join("")}${b.currentSize ? "" : `<span class="muted or-bigger">or bigger</span>`}</div>` : ""}
+          ${owner() && b.sizeAt && hasSize(b) ? `<span class="muted size-age">Size set ${ago(b.sizeAt)}</span>` : ""}</div>
+        ${b.currentSize || !(b.styleSizes || []).length
+          ? `<div class="size-badge">${esc(b.currentSize || "—")}<small>${b.currentSize ? ((b.styleSizes || []).length ? "everything else" : "or bigger") : "size not set"}</small></div>`
+          : `<div class="size-badge by-style" aria-hidden="true"></div>`}
         ${owner() ? `<button class="link" data-act="edit-brand" data-id="${b.id}">Edit</button>` : ""}
       </div>`).join("")
       : `<div class="empty">No brands yet.</div>`}
@@ -728,7 +753,7 @@ function sizesView() {
 
 // Owner reminder: babies outgrow sizes fast, and "Fits Now" + sold-out checks rely on these.
 const SIZE_STALE_MS = 60 * 86400000;
-const sizeStale = (b) => !!b.currentSize && !!b.sizeAt && Date.now() - b.sizeAt > SIZE_STALE_MS;
+const sizeStale = (b) => hasSize(b) && !!b.sizeAt && Date.now() - b.sizeAt > SIZE_STALE_MS;
 function sizeNudge(bs) {
   const stale = bs.filter(sizeStale);
   if (!stale.length) return "";
@@ -1647,8 +1672,9 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
     // Brand's saved size fills in only when it's the right kind (shoe size for shoes, clothing size otherwise).
     const fillBrandSize = () => {
       const b = brandByName(f("brand").value);
-      if (cat !== "clothes" || !b?.currentSize || f("size").value) return;
-      if (isShoeSize(b.currentSize) === isShoeType(f("type").value)) setSize(f("size"), b.currentSize);
+      const z = sizeForStyle(b, f("type").value, f("title").value);
+      if (cat !== "clothes" || !z || f("size").value) return;
+      if (isShoeSize(z) === isShoeType(f("type").value)) setSize(f("size"), z);
     };
     f("type").addEventListener("change", () => { setSizeKind(f("size"), isShoeType(f("type").value) ? "shoes" : "clothes"); fillBrandSize(); });
     f("brand").addEventListener("change", fillBrandSize);
@@ -1737,7 +1763,11 @@ function brandSheet(existing = null) {
   openSheet(
     `<h2>${existing ? "Edit Brand" : "Add Brand"}</h2>
      <label class="f" for="b-name">Brand</label><input class="in" id="b-name" name="name" maxlength="60" value="${esc(b.name || "")}" placeholder="Little Sleepies" />
-     <label class="f" for="b-size">Current size</label>${sizeSelect('id="b-size" name="currentSize"', b.currentSize || "", { kind: "both" })}
+     <label class="f" for="b-size">Current size <span class="muted">(most styles)</span></label>${sizeSelect('id="b-size" name="currentSize"', b.currentSize || "", { kind: "both", blank: "Choose a size (optional)" })}
+     <div class="label-row"><label class="f">Sizes by style <span class="muted">(when a style fits differently)</span></label></div>
+     <div id="b-styles"></div>
+     <button type="button" class="btn ghost small" data-m="add-style">+ Add a style size</button>
+     <datalist id="dl-styles">${typesFor("clothes").map((t) => `<option value="${esc(t)}">`).join("")}</datalist>
      <label class="f" for="b-notes">Sizing note (optional)</label><input class="in" id="b-notes" name="notes" maxlength="140" value="${esc(b.notes || "")}" placeholder="Runs small, size up" />
      <datalist id="dl-sizes">${sizeOptions()}</datalist>
      <div class="err sheet-err" hidden></div>
@@ -1750,10 +1780,30 @@ function brandSheet(existing = null) {
     (el) => {
       const v = (n) => el.querySelector(`[name="${n}"]`).value.trim();
       const recordId = b.id || newId();
+      // Sizes by style: free-text style (her exact name for it, like the brand's own) + a size from the dropdown.
+      const box = el.querySelector("#b-styles");
+      const addBtn = el.querySelector('[data-m="add-style"]');
+      const rowHtml = (r = {}) => `<div class="style-size-row">
+          <input class="in" data-f="style" maxlength="40" list="dl-styles" value="${esc(r.style || "")}" placeholder="Zippy, or Shorty & daywear" aria-label="Style" />
+          ${sizeSelect('data-f="size" aria-label="Size"', r.size || "", { kind: "both", blank: "Size" })}
+          <button type="button" class="icon-btn danger" data-m="remove" aria-label="Remove">×</button>
+        </div>`;
+      const sync = () => { addBtn.hidden = box.children.length >= 8; };
+      box.innerHTML = (b.styleSizes || []).map(rowHtml).join("");
+      sync();
+      addBtn.addEventListener("click", () => { box.insertAdjacentHTML("beforeend", rowHtml()); box.lastElementChild.querySelector("input").focus(); sync(); });
+      box.addEventListener("click", (ev) => { if (ev.target.closest('[data-m="remove"]')) { ev.target.closest(".style-size-row").remove(); sync(); } });
       el.querySelector('[data-act="cancel"]').addEventListener("click", () => closeSheet());
       wireDelete(el, () => store.deleteBrand(b.id));
       wireSave(el, async () => {
-        const d = { id: recordId, name: v("name"), currentSize: v("currentSize"), notes: v("notes") };
+        const styleSizes = [];
+        for (const row of box.querySelectorAll(".style-size-row")) {
+          const style = row.querySelector('[data-f="style"]').value.trim(), size = row.querySelector('[data-f="size"]').value;
+          if (!style && !size) continue;
+          if (!style || !size) throw new Error("Each style size needs both a style and a size.");
+          styleSizes.push({ style, size });
+        }
+        const d = { id: recordId, name: v("name"), currentSize: v("currentSize"), notes: v("notes"), ...(styleSizes.length && { styleSizes }) };
         if (!d.name) throw new Error("The brand needs a name.");
         await store.upsertBrand(d);
         return "Saved";

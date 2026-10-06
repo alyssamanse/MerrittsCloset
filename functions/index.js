@@ -16,7 +16,7 @@
 
 const functions = require("@google-cloud/functions-framework");
 const admin = require("firebase-admin");
-const { reduce, reducePrivate, PRIVATE_ACTIONS, publicView, Limiter, RATES, ApiError, GUEST_ACTIONS, OWNER_ACTIONS } = require("./logic");
+const { reduce, sizeForStyle, brandKey, reducePrivate, PRIVATE_ACTIONS, publicView, Limiter, RATES, ApiError, GUEST_ACTIONS, OWNER_ACTIONS } = require("./logic");
 const crypto = require("crypto");
 const { importLink, checkStock } = require("./importer");
 
@@ -151,8 +151,8 @@ functions.http("api", async (req, res) => {
       } else {
         // Sold out only if nothing is left in the size gifters should buy (the item's size,
         // else her current size for that brand) or bigger.
-        const brandSize = (name) => Object.values(doc.brands || {}).find((b) => (b.name || "").trim().toLowerCase() === (name || "").trim().toLowerCase())?.currentSize || "";
-        const results = await Promise.all(recs.map(async (r) => ({ id: r.id, stock: await checkStock(r.url, r.size || brandSize(r.brand)).catch(() => "unknown") })));
+        const brandOf = (name) => Object.values(doc.brands || {}).find((b) => brandKey(b.name) === brandKey(name));
+        const results = await Promise.all(recs.map(async (r) => ({ id: r.id, stock: await checkStock(r.url, r.size || sizeForStyle(brandOf(r.brand), r.type, r.title)).catch(() => "unknown") })));
         found = results.filter((r) => r.stock === "out").length;
         reduceAction = "setStock"; reducePayload = { results, at: Date.now() };
       }

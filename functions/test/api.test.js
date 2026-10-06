@@ -474,3 +474,21 @@ test("brand size dates are set by the server", () => {
   assert.equal(state.brands.brand_0000001.sizeAt, 50);
   assert.throws(() => logic.reduce(state, "upsertBrand", { brand: { ...brand, sizeAt: 1 } }, { isOwner: true, now: 60 }));
 });
+
+test("sizes by style: validated, and the right size is picked per style", () => {
+  const { reduce, sizeForStyle } = require("../logic");
+  const ctx = { isOwner: true, now: 1 };
+  let { state } = reduce(null, "init", {}, ctx);
+  const brand = { id: "brand_ls000001", name: "Little Sleepies", currentSize: "", notes: "", styleSizes: [{ style: "Zippy", size: "3–6M" }, { style: "Shorty & daywear", size: "6–12M" }] };
+  ({ state } = reduce(state, "upsertBrand", { brand }, ctx));
+  const b = state.brands.brand_ls000001;
+  assert.equal(b.styleSizes.length, 2);
+  assert.equal(sizeForStyle(b, "Zippy", "Bamboo Zippy"), "3–6M");
+  assert.equal(sizeForStyle(b, "Shorty", ""), "6–12M");
+  assert.equal(sizeForStyle(b, "Two-piece daywear", "Cloud Set"), "6–12M");
+  assert.equal(sizeForStyle(b, "", "Bamboo Shorty Romper"), "6–12M");
+  assert.equal(sizeForStyle({ ...b, currentSize: "6–9M" }, "Dress", ""), "6–9M", "falls back to the main size");
+  assert.throws(() => reduce(state, "upsertBrand", { brand: { ...brand, styleSizes: [{ style: "Zippy", size: "3–6M", extra: 1 }] } }, ctx));
+  assert.throws(() => reduce(state, "upsertBrand", { brand: { ...brand, styleSizes: [{ style: "", size: "3–6M" }] } }, ctx));
+  assert.throws(() => reduce(state, "upsertBrand", { brand: { ...brand, styleSizes: Array(9).fill({ style: "a", size: "b" }) } }, ctx));
+});

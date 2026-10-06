@@ -499,6 +499,13 @@
   .card.draft { border-style: dashed; background: var(--paper); }
   .card .ribbon.hidden-ribbon { color: var(--taupe); }
   .hidden-note { margin: 0 0 10px; font-size: 13px; }
+  /* Sizes by style */
+  .style-sizes { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+  .style-sizes .chip b { font-weight: 700; margin-right: 3px; }
+  .size-badge.by-style { min-width: 0; }
+  .style-sizes .or-bigger { font-size: 12.5px; align-self: center; }
+  .style-size-row { display: grid; grid-template-columns: 1fr 118px auto; gap: 8px; align-items: center; margin-bottom: 8px; }
+  #b-styles + .btn { margin-bottom: 6px; }
   /* Family page */
   .back-row { margin: -6px 0 4px; }
   .back-row .link { padding-left: 0; }
@@ -550,6 +557,6 @@
 </head>
 <body>
   <div id="app"></div>
-  <script type="module" src="app.js?v=1005-1126"></script>
+  <script type="module" src="app.js?v=1006-0246"></script>
 </body>
 </html>

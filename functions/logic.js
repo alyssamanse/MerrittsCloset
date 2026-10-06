@@ -54,7 +54,7 @@ function onlyKeys(obj, allowed, what) {
   for (const k of Object.keys(obj)) if (!allowed.includes(k)) bad(`Unexpected field "${k}" in ${what}`);
 }
 
-const BRAND_FIELDS = ["id", "name", "currentSize", "notes"];
+const BRAND_FIELDS = ["id", "name", "currentSize", "notes", "styleSizes"];
 const ITEM_FIELDS = ["id", "category", "title", "brand", "printName", "type", "ageRange", "size", "price", "priority", "sizeFlexible", "printFlexible", "notes", "url", "image"];
 const TOY_FIELDS = ["id", "category", "name", "brand", "type", "url", "image"]; // "Toys she has" and "Other things she has"
 const FAMILY_FIELDS = ["id", "person", "category", "title", "brand", "sizes", "price", "priority", "notes", "url", "image"];
@@ -75,9 +75,28 @@ function types(v) {
 }
 const mergeTypes = (a = [], b = []) => types([...a, ...b.filter((t) => !a.some((x) => x.toLowerCase() === t.toLowerCase()))].slice(0, 8));
 
+const MAX_STYLE_SIZES = 8;
+// Which size she wears for an item: a matching "size by style" row, else the brand's main size.
+// A row matches when its style text (or any part of "Shorty & daywear") appears in the item's type or name.
+function sizeForStyle(brand, type, title) {
+  const rows = (brand && brand.styleSizes) || [];
+  const t = String(type || "").toLowerCase().trim();
+  const hay = `${t} ${String(title || "").toLowerCase()}`;
+  const parts = (r) => r.style.toLowerCase().split(/\s*(?:,|&|\/|\+|\band\b)\s*/).map((x) => x.trim()).filter(Boolean);
+  const hit = rows.find((r) => r.style.toLowerCase().trim() === t) ||
+    rows.find((r) => hay.includes(r.style.toLowerCase().trim())) ||
+    rows.find((r) => parts(r).some((w) => hay.includes(w)));
+  return hit ? hit.size : (brand && brand.currentSize) || "";
+}
 function cleanBrand(b) {
   onlyKeys(b, BRAND_FIELDS, "brand");
-  return { id: id(b.id), name: str(b.name, "Brand", 60, { required: true }), currentSize: str(b.currentSize, "Size", 20), notes: str(b.notes, "Note", 140) };
+  // Sizes by style: she can wear different sizes in one brand ("Zippy" 3–6M, "Shorty & daywear" 6–12M).
+  if (b.styleSizes !== undefined && (!Array.isArray(b.styleSizes) || b.styleSizes.length > MAX_STYLE_SIZES)) bad(`Up to ${MAX_STYLE_SIZES} sizes by style`);
+  const styleSizes = (b.styleSizes || []).map((r) => {
+    onlyKeys(r, ["style", "size"], "style size");
+    return { style: str(r.style, "Style", 40, { required: true }), size: str(r.size, "Size", 20, { required: true }) };
+  });
+  return { id: id(b.id), name: str(b.name, "Brand", 60, { required: true }), currentSize: str(b.currentSize, "Size", 20), notes: str(b.notes, "Note", 140), ...(styleSizes.length && { styleSizes }) };
 }
 function cleanItem(i) {
   onlyKeys(i, ITEM_FIELDS, "item");
@@ -311,7 +330,8 @@ function reduce(prev, action, payload, { isOwner, now, priv = null }) {
       const cur = state.brands[b.id];
       if (!cur && Object.keys(state.brands).length >= LIMITS.brands) bad(`You can have up to ${LIMITS.brands} brands`);
       // sizeAt = when her size in this brand last changed (drives the "still right?" reminder).
-      const next = { ...b, sizeAt: cur && cur.currentSize === b.currentSize ? cur.sizeAt ?? now : now };
+      const sameSizes = cur && cur.currentSize === b.currentSize && JSON.stringify(cur.styleSizes || []) === JSON.stringify(b.styleSizes || []);
+      const next = { ...b, sizeAt: sameSizes ? cur.sizeAt ?? now : now };
       if (JSON.stringify(cur) === JSON.stringify(next)) return same;
       state.brands[b.id] = next;
       break;
@@ -730,4 +750,4 @@ const RATES = {
   lookups: 8,         // Find photos / Check stock calls (each reads up to 10 store pages)
 };
 
-module.exports = { reducePrivate, PRIVATE_ACTIONS, emptyPrivate, brandKey, MAX_STOCK_RESULTS, DEFAULT_TYPES, reduce, publicView, Limiter, RATES, LIMITS, ApiError, claimHash, GUEST_ACTIONS, OWNER_ACTIONS };
+module.exports = { sizeForStyle, reducePrivate, PRIVATE_ACTIONS, emptyPrivate, brandKey, MAX_STOCK_RESULTS, DEFAULT_TYPES, reduce, publicView, Limiter, RATES, LIMITS, ApiError, claimHash, GUEST_ACTIONS, OWNER_ACTIONS };
