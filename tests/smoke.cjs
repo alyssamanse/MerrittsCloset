@@ -40,6 +40,12 @@ const openSheet = async (p, sel, expectTitle) => {
     must(await g.locator(".wl-fold[data-wl=hidden]").count() === 0, "hidden section shown to a guest");
     must(!(await g.locator("main").innerText()).includes("Wooden Play Kitchen"), "hidden item visible to a guest");
   });
+  await step("Top Print and Top Style badges", async () => {
+    const card = g.locator("#item-i9");
+    must(await card.locator(".chip.top", { hasText: "Top Print" }).count() === 1, "no Top Print on a favorite print");
+    must(await card.locator(".chip.top", { hasText: "Top Style" }).count() === 1, "no Top Style on a favorite style");
+    must(await g.locator("#item-i1 .chip.top").count() === 0, "badge on a wish that isn't a favorite");
+  });
   await step("wishlist shows sections", async () => {
     must(await g.locator(".wl-fold[data-wl=most] .card").count() > 0, "no Most Wanted cards");
     must(await g.locator(".wl-fold[data-wl=claimed]").count() === 1, "no Already Claimed section");

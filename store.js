@@ -10,7 +10,7 @@
 //   • Retries are capped (2) with backoff, only for transient errors, and every
 //     change is idempotent on the server, so a retry can't double a write.
 //   • Identical in-flight requests are merged (double taps send one request).
-import { CONFIG } from "./config.js?v=1006-0246";
+import { CONFIG } from "./config.js?v=1010-0750";
 
 const SDK = "https://www.gstatic.com/firebasejs/11.0.2";
 const CACHE_KEY = `closet:${CONFIG.wishlistId}`;
@@ -266,6 +266,7 @@ export function createDemoStore() {
     items: {
       i1: { id: "i1", url: "https://example.com/products/strawberry-footie", title: "Zippered Footie", printName: "Strawberry Patch", type: "Footie", brand: "Kyte Baby", size: "12–18M", price: "$38", priority: "most", image: img("#F3D3CF", "#C9787A"), sizeFlexible: true, createdAt: now },
       i2: { id: "i2", url: "https://example.com/products/woodland-set", title: "Bamboo Two-Piece Set", printName: "Woodland Friends", type: "Two-piece PJs", brand: "Little Sleepies", size: "12–18M", price: "$36", priority: "nice", image: img("#E5E6D2", "#8E9A6F"), printFlexible: true, createdAt: now },
+      i9: { id: "i9", title: "Two-Piece Bamboo PJ Set", printName: "Bunny Meadow", type: "Two-piece PJs", brand: "Little Sleepies", size: "12–18M", price: "$42", priority: "nice", image: img("#E3E6D3", "#FFFFFF"), url: "", createdAt: now },
       i4: { id: "i4", category: "toy", title: "Silicone Stacking Cups", brand: "Mushie", type: "Stacker", ageRange: "6m+", price: "$16", priority: "most", image: img("#E8EBDA", "#A7B8A0"), url: "", createdAt: now },
       i5: { id: "i5", category: "toy", title: "Board Book Set", brand: "Usborne", type: "Book", ageRange: "0–2y", price: "$24", priority: "nice", image: img("#F6DCD8", "#C48E93"), url: "", createdAt: now },
       i6: { id: "i6", category: "other", title: "Knit Stroller Blanket", brand: "Quincy Mae", type: "Blanket", price: "$58", priority: "nice", image: img("#EBD6D3", "#D4AEAA"), url: "", createdAt: now },

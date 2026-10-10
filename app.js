@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1006-0246";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1006-0246";
-const BUILD = "1006-0246"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1010-0750";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1010-0750";
+const BUILD = "1010-0750"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = ["wishlist", "closet", "sizes"];
@@ -372,6 +372,24 @@ function closetMatch(i) {
   const bk = brandKey(i.brand), pn = i.printName.trim().toLowerCase();
   return list(S.data.prints).find((p) => brandKey(p.brand) === bk && (p.printName || "").trim().toLowerCase() === pn) || null;
 }
+// "Top Print" / "Top Style": the wish is one of her favorites.
+// Brands must agree when both have one (matched by brandKey, so "Kyte Baby Co" = "Kyte Baby").
+const sameBrandOrUnset = (a, b) => !brandKey(a) || !brandKey(b) || brandKey(a) === brandKey(b);
+const words = (t) => String(t || "").toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter(Boolean);
+function topPrint(i) {
+  if (isToy(i) || !(i.printName || "").trim()) return null;
+  const pn = words(i.printName).join(" ");
+  return list(S.data.prints).find((p) => p.favorite && words(p.printName).join(" ") === pn && sameBrandOrUnset(p.brand, i.brand)) || null;
+}
+// A favorite style matches when every word of its name appears somewhere in the wish's
+// name, type, print or note, in any order ("Short-Long Romper" = "short long romper").
+function topStyle(i) {
+  const hay = new Set(words(`${i.title} ${i.type} ${i.printName} ${i.notes}`));
+  return list(S.data.styleFavs).find((f) => {
+    const w = words(f.name);
+    return w.length && w.every((x) => hay.has(x)) && sameBrandOrUnset(f.brand, i.brand);
+  }) || null;
+}
 const giverOf = (id) => S.private?.givers?.[id]?.from || "";
 function itemCard(i, { inMost = false, draft = false } = {}) {
   const claimed = isClaimed(i.id);
@@ -393,6 +411,9 @@ function itemCard(i, { inMost = false, draft = false } = {}) {
         i.printFlexible && `<span class="chip moss">Any print OK</span>`,
         i.price && `<span class="chip tan">${esc(i.price)}</span>`,
       ];
+  const favStyle = topStyle(i);
+  if (favStyle) chips.unshift(`<span class="chip top" title="${esc(favStyle.name)} is one of her favorite styles">★ Top Style</span>`);
+  if (topPrint(i)) chips.unshift(`<span class="chip top" title="One of her favorite prints">★ Top Print</span>`);
   if (i.stock === "out") chips.unshift(`<span class="chip warn">Sold out online</span>`);
   const k = (a) => `${a}:${i.id}`;
 
