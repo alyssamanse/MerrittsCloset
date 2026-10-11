@@ -46,6 +46,13 @@ const openSheet = async (p, sel, expectTitle) => {
     must(await card.locator(".chip.top", { hasText: "Top Style" }).count() === 1, "no Top Style on a favorite style");
     must(await g.locator("#item-i1 .chip.top").count() === 0, "badge on a wish that isn't a favorite");
   });
+  await step("Current Obsessions: guests read only", async () => {
+    await tab(g, "sizes");
+    must(await g.locator(".obsessions .obs-chip").count() > 0, "no obsession chips");
+    must(/Updated \w{3} \d+, \d{4}/.test(await g.locator(".obs-updated").textContent()), "no Updated date");
+    must(await g.locator("[data-act=edit-obsessions]").count() === 0, "guest sees Edit");
+    await tab(g, "wishlist");
+  });
   await step("wishlist shows sections", async () => {
     must(await g.locator(".wl-fold[data-wl=most] .card").count() > 0, "no Most Wanted cards");
     must(await g.locator(".wl-fold[data-wl=claimed]").count() === 1, "no Already Claimed section");
@@ -124,6 +131,32 @@ const openSheet = async (p, sel, expectTitle) => {
     await o.locator(".wl-fold[data-wl=hidden] .card", { hasText: title }).locator("[data-act=show-item]").click(); await o.waitForTimeout(700);
     must(!(await o.locator(".wl-fold[data-wl=hidden]").innerText()).includes(title), "still hidden after Show to Guests");
     must(await o.locator(`.wl-fold:not([data-wl=hidden]) .card:has-text("${title}")`).count() === 1, "not back on the list");
+  });
+  await step("Current Obsessions: edit, reorder, save", async () => {
+    await tab(o, "sizes");
+    await o.click("[data-act=edit-obsessions]"); await o.waitForTimeout(250);
+    const labels = () => o.locator('.obs-row [data-f="label"]').evaluateAll((e) => e.map((x) => x.value));
+    const before = await labels();
+    await o.locator('.obs-row[data-i="0"] [data-m="drag"]').focus(); await o.keyboard.press("ArrowDown");
+    must((await labels())[1] === before[0], "keyboard reorder didn't move the first entry");
+    await o.click('.sheet-bg [data-m="add"]'); await o.locator('.obs-row:last-child [data-f="label"]').fill("Peekaboo");
+    await o.click('.sheet-bg [data-act="save"]'); await o.waitForTimeout(500);
+    const chips = await o.locator(".obs-chip b").allTextContents();
+    must(chips[1] === before[0] && chips.includes("Peekaboo"), `chips were ${chips.join(", ")}`);
+    await tab(o, "wishlist");
+  });
+  await step("Find Photos: search, pick one, saved", async () => {
+    await tab(o, "closet");
+    const n = await o.locator("[data-act=find-photos]").textContent();
+    await o.click("[data-act=find-photos]"); await o.waitForTimeout(250);
+    const row = o.locator(".pf-row").first();
+    await row.locator('[data-m="search"]').click(); await o.waitForTimeout(700);
+    must(await row.locator(".pf-choice").count() === 3, "expected 3 photo choices");
+    await row.locator(".pf-choice").first().click(); await o.waitForTimeout(600);
+    await o.click('.sheet-bg [data-act="cancel"]'); await o.waitForTimeout(200);
+    const after = await o.locator("[data-act=find-photos]").textContent().catch(() => "Find Photos (0)");
+    must(parseInt(after.match(/\d+/)) === parseInt(n.match(/\d+/)) - 1, `${n} → ${after}`);
+    await tab(o, "wishlist");
   });
   await step("wishlist forms", async () => { await openSheet(o, "[data-act=add]", "Add"); await openSheet(o, "[data-act=add-thank]", "Thank"); });
   await step("closet: bulk delete and undo", async () => {

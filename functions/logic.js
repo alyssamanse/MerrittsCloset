@@ -54,7 +54,7 @@ function onlyKeys(obj, allowed, what) {
   for (const k of Object.keys(obj)) if (!allowed.includes(k)) bad(`Unexpected field "${k}" in ${what}`);
 }
 
-const BRAND_FIELDS = ["id", "name", "currentSize", "notes", "styleSizes"];
+const BRAND_FIELDS = ["id", "name", "currentSize", "notes", "styleSizes", "site"];
 const ITEM_FIELDS = ["id", "category", "title", "brand", "printName", "type", "ageRange", "size", "price", "priority", "sizeFlexible", "printFlexible", "notes", "url", "image"];
 const TOY_FIELDS = ["id", "category", "name", "brand", "type", "url", "image"]; // "Toys she has" and "Other things she has"
 const FAMILY_FIELDS = ["id", "person", "category", "title", "brand", "sizes", "price", "priority", "notes", "url", "image"];
@@ -76,6 +76,16 @@ function types(v) {
 const mergeTypes = (a = [], b = []) => types([...a, ...b.filter((t) => !a.some((x) => x.toLowerCase() === t.toLowerCase()))].slice(0, 8));
 
 const MAX_STYLE_SIZES = 8;
+// A brand's store website, kept as a bare hostname ("littlesleepies.com"). Used by Find Photos.
+function siteHost(v) {
+  const raw = str(v, "Store website", 100).toLowerCase();
+  if (!raw) return "";
+  let h;
+  try { h = new URL(/^https?:\/\//.test(raw) ? raw : `https://${raw}`).hostname; } catch { bad("Store website isn't a valid address"); }
+  h = h.replace(/^www\./, "");
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(h)) bad("Store website isn't a valid address");
+  return h;
+}
 // Which size she wears for an item: a matching "size by style" row, else the brand's main size.
 // A row matches when its style text (or any part of "Shorty & daywear") appears in the item's type or name.
 function sizeForStyle(brand, type, title) {
@@ -96,7 +106,8 @@ function cleanBrand(b) {
     onlyKeys(r, ["style", "size"], "style size");
     return { style: str(r.style, "Style", 40, { required: true }), size: str(r.size, "Size", 20, { required: true }) };
   });
-  return { id: id(b.id), name: str(b.name, "Brand", 60, { required: true }), currentSize: str(b.currentSize, "Size", 20), notes: str(b.notes, "Note", 140), ...(styleSizes.length && { styleSizes }) };
+  const site = siteHost(b.site);
+  return { id: id(b.id), name: str(b.name, "Brand", 60, { required: true }), currentSize: str(b.currentSize, "Size", 20), notes: str(b.notes, "Note", 140), ...(styleSizes.length && { styleSizes }), ...(site && { site }) };
 }
 function cleanItem(i) {
   onlyKeys(i, ITEM_FIELDS, "item");
@@ -185,7 +196,7 @@ const brandKey = (name) => {
 // Every action changes at most one document. Repeating an action is a no-op
 // (changed: false → no write), which makes client retries safe.
 const GUEST_ACTIONS = new Set(["claim", "unclaim"]);
-const OWNER_ACTIONS = new Set(["init", "setVisibility", "upsertBrand", "deleteBrand", "upsertItem", "deleteItem", "receive", "upsertPrint", "deletePrint", "upsertToy", "deleteToy", "setFavoriteStyles", "addType", "renameType", "deleteType", "resetClaim", "importBatch", "setColors", "setImages", "setPlan", "deletePlan", "setStock", "upsertFamilyItem", "deleteFamilyItem", "upsertStyleFav", "deleteStyleFav", "bulkCloset", "undoBulkDelete", "confirmSizes", "hideItem", "showItem"]);
+const OWNER_ACTIONS = new Set(["init", "setVisibility", "upsertBrand", "deleteBrand", "upsertItem", "deleteItem", "receive", "upsertPrint", "deletePrint", "upsertToy", "deleteToy", "setFavoriteStyles", "addType", "renameType", "deleteType", "resetClaim", "importBatch", "setColors", "setImages", "setPlan", "deletePlan", "setStock", "upsertFamilyItem", "deleteFamilyItem", "upsertStyleFav", "deleteStyleFav", "bulkCloset", "undoBulkDelete", "confirmSizes", "hideItem", "showItem", "setObsessions", "setPhoto"]);
 
 function reduce(prev, action, payload, { isOwner, now, priv = null }) {
   if (!GUEST_ACTIONS.has(action) && !OWNER_ACTIONS.has(action)) bad("Unknown action");
@@ -454,6 +465,41 @@ function reduce(prev, action, payload, { isOwner, now, priv = null }) {
       break;
     }
 
+    case "setObsessions": {
+      // "Current Obsessions" chips on the Sizes page: the whole list, in order, replaced at once.
+      onlyKeys(p, ["items"], "payload");
+      if (!Array.isArray(p.items)) bad("items must be a list");
+      if (p.items.length > MAX_OBSESSIONS) bad(`Up to ${MAX_OBSESSIONS} obsessions`);
+      const items = p.items.map((o) => {
+        onlyKeys(o, ["id", "emoji", "label", "note"], "obsession");
+        const emoji = str(o.emoji, "Emoji", 16);
+        if (/[<>"'`]/.test(emoji)) bad("That emoji isn't allowed");
+        return { id: id(o.id), emoji, label: str(o.label, "Label", 40, { required: true }), note: str(o.note, "Note", 80) };
+      });
+      if (new Set(items.map((o) => o.id)).size !== items.length) bad("Duplicate entry");
+      const cur = state.obsessions?.items || [];
+      if (JSON.stringify(cur) === JSON.stringify(items)) return same;
+      state.obsessions = { items, updatedAt: now }; // "Updated <date>" moves only when the list really changes
+      break;
+    }
+    case "setPhoto": {
+      // A photo picked in Find Photos: its image and the product page it came from, on one record.
+      onlyKeys(p, ["kind", "id", "image", "url"], "payload");
+      const kinds = { prints: "prints", items: "items", toys: "toys" };
+      const kind = kinds[p.kind];
+      if (!kind) bad("kind must be prints, items or toys");
+      const rec = state[kind][id(p.id)];
+      if (!rec) throw new ApiError(404, "That isn't in the list anymore.");
+      const image = url(p.image, "Image");
+      if (!image) bad("Pick a photo");
+      const link = url(p.url, "Link");
+      // The product link is filled in only if the record has none, so a link she chose is never replaced.
+      const setLink = link && !rec.url;
+      if (rec.image === image && !setLink) return same;
+      rec.image = image;
+      if (setLink) rec.url = link;
+      break;
+    }
     case "setImages": {
       // Photos found for closet prints (owner's "Find photos"). Only fills prints that exist.
       onlyKeys(p, ["images"], "payload");
@@ -652,7 +698,7 @@ function reduce(prev, action, payload, { isOwner, now, priv = null }) {
 }
 
 // What readers get back from the API. Matches what the Firestore document holds.
-const publicView = (s) => s && { v: s.v, visibility: s.visibility, brands: s.brands, items: s.items, prints: s.prints, toys: s.toys || {}, claims: s.claims, favoriteStyles: s.favoriteStyles || [], typeLists: s.typeLists || {}, ...(s.colors && { colors: s.colors }), plans: s.plans || [], family: s.family || {}, styleFavs: s.styleFavs || {}, ...(s.trash && { trash: { kind: s.trash.kind, at: s.trash.at, count: Object.keys(s.trash.records || {}).length } }) };
+const publicView = (s) => s && { v: s.v, visibility: s.visibility, brands: s.brands, items: s.items, prints: s.prints, toys: s.toys || {}, claims: s.claims, favoriteStyles: s.favoriteStyles || [], typeLists: s.typeLists || {}, ...(s.colors && { colors: s.colors }), plans: s.plans || [], family: s.family || {}, styleFavs: s.styleFavs || {}, ...(s.obsessions && { obsessions: s.obsessions }), ...(s.trash && { trash: { kind: s.trash.kind, at: s.trash.at, count: Object.keys(s.trash.records || {}).length } }) };
 
 // ── rate limiting (in memory) ───────────────────────────────────────
 // Token buckets. The function runs with max instances = 1, so one process
@@ -679,6 +725,7 @@ class Limiter {
 //   thanks: { [id]: { id, title, from, at, done } }  thank-you checklist
 const PRIVATE_ACTIONS = new Set(["getPrivate", "setThank", "deleteThank", "addThank", "upsertDraft", "deleteDraft"]);
 const MAX_DRAFTS = 50;
+const MAX_OBSESSIONS = 30;
 const MAX_THANKS = 200;
 const emptyPrivate = () => ({ givers: {}, thanks: {}, drafts: {} });
 function reducePrivate(prevPriv, action, payload, { prevPublic, nextPublic, publicChanged, isOwner, now, newId }) {

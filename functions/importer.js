@@ -264,4 +264,4 @@ async function checkStock(rawUrl, minSize = "") {
   return a === true ? "in" : a === false ? "out" : "unknown";
 }
 
-module.exports = { fromWayback, sizeRank, shoeRank, shopifyInStock, checkStock, availability, importLink, parseShopify, parseHtml, printFromTitle, checkUrl, httpError };
+module.exports = { get, fromWayback, sizeRank, shoeRank, shopifyInStock, checkStock, availability, importLink, parseShopify, parseHtml, printFromTitle, checkUrl, httpError };

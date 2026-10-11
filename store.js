@@ -10,7 +10,7 @@
 //   • Retries are capped (2) with backoff, only for transient errors, and every
 //     change is idempotent on the server, so a retry can't double a write.
 //   • Identical in-flight requests are merged (double taps send one request).
-import { CONFIG } from "./config.js?v=1010-0750";
+import { CONFIG } from "./config.js?v=1011-0826";
 
 const SDK = "https://www.gstatic.com/firebasejs/11.0.2";
 const CACHE_KEY = `closet:${CONFIG.wishlistId}`;
@@ -222,6 +222,9 @@ export async function createFirebaseStore() {
     deleteType: (category, name) => mutate("deleteType", { category, name }),
     importBatch: (prints, toys) => mutate("importBatch", { prints, toys }),
     setColors: (colors) => mutate("setColors", { colors }),
+    setObsessions: (items) => mutate("setObsessions", { items }),
+    searchPhotos: (kind, id) => call("searchPhotos", { kind, id }),
+    setPhoto: (kind, id, image, url) => mutate("setPhoto", { kind, id, image, url }),
     setPlan: (plan) => mutate("setPlan", { plan }),
     upsertFamilyItem: (item) => mutate("upsertFamilyItem", { item }),
     upsertStyleFav: (style) => mutate("upsertStyleFav", { style }),
@@ -278,6 +281,8 @@ export function createDemoStore() {
       p2: { id: "p2", brand: "Kyte Baby", printName: "Blush", types: ["Footie"], outgrown: true, image: img("#F4D6D3", "#E8B7B3") },
       p3: { id: "p3", brand: "Little Sleepies", printName: "Bunny Meadow", types: ["Zippy"], favorite: true, image: img("#E3E6D3", "#FFFFFF") },
       p4: { id: "p4", brand: "Posh Peanut", printName: "Honey Bears", types: ["Romper", "Bow"], image: img("#EADFD3", "#B9A58C") },
+      p7: { id: "p7", brand: "Janie and Jack", printName: "Sailboat Stripe", types: ["Romper"], outgrown: false },
+      p8: { id: "p8", brand: "Carter's", printName: "Nothing Found Floral", types: ["Bodysuit"] },
       p5: { id: "p5", brand: "Posh Peanut", printName: "Pink Stripe", types: ["Dress"], image: img("#F8E3E1", "#D99A97") },
     },
     toys: {
@@ -287,6 +292,12 @@ export function createDemoStore() {
       t3: { id: "t3", name: "Bunny Lovey", brand: "Jellycat", type: "Plush", image: img("#F8E3E1", "#FFFFFF") },
     },
     favoriteStyles: ["Zippy", "Two-piece PJs"],
+    obsessions: { updatedAt: now - 86400000 * 4, items: [
+      { id: "ob_teethers01", emoji: "🦷", label: "Teethers", note: "anything crinkly" },
+      { id: "ob_giraffes01", emoji: "🦒", label: "Giraffes", note: "" },
+      { id: "ob_stuffies01", emoji: "🧸", label: "Stuffies", note: "the softer the better" },
+      { id: "ob_books0001", emoji: "", label: "Touch-and-feel books", note: "" },
+    ] },
     styleFavs: {
       s1: { id: "s1", brand: "Kyte Baby", name: "Bamboo Zip Romper", url: "https://example.com/products/zip-romper", image: img("#F3DCD9", "#C98F95") },
       s2: { id: "s2", brand: "Little Sleepies", name: "Two-Piece Bamboo PJ Set", url: "https://example.com/products/pj-set", image: img("#E3E6D3", "#8E9A6F") },
@@ -379,6 +390,17 @@ export function createDemoStore() {
       }
     }),
     setColors: m((colors) => { data.colors = colors; }),
+    searchPhotos: async (kind, id) => {
+      await delay();
+      const rec = data[kind]?.[id];
+      if (!rec) throw new FriendlyError("That isn't in the list anymore.");
+      const name = rec.printName || rec.name || rec.title || "";
+      if (/nothing/i.test(name)) return { choices: [], searched: ["store", "web"], webConfigured: true };
+      const shades = [["#F3DCD9", "#C98F95"], ["#E3E6D3", "#8E9A6F"], ["#EADFD3", "#B08F73"]];
+      return { choices: shades.map(([bg, fg], k) => ({ image: img(bg, fg), url: `https://example.com/products/${encodeURIComponent(name.toLowerCase().replace(/\s+/g, "-"))}-${k + 1}`, title: `${name} ${["Zippy", "Romper", "Two-Piece"][k]}`, source: k ? "web" : "store" })), searched: ["store"], webConfigured: true };
+    },
+    setPhoto: m((kind, id, image, url) => { const r = data[kind]?.[id]; if (!r) throw new FriendlyError("That isn't in the list anymore."); r.image = image; if (url && !r.url) r.url = url; }),
+    setObsessions: m((items) => { if (JSON.stringify(data.obsessions?.items || []) !== JSON.stringify(items)) data.obsessions = { items, updatedAt: Date.now() }; }),
     bulkCloset: m((kind, ids, op) => {
       const removed = {};
       for (const x of ids) {

@@ -7,6 +7,7 @@
 
 export const CONFIG = {
   babyName: "Merritt",
+  nickname: "Mer",           // used in friendly lines like "What Mer is loving these days"
   // Who gifters are thanking (shown when they add their name to a claim).
   ownerName: "Lys",
 

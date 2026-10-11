@@ -492,3 +492,57 @@ test("sizes by style: validated, and the right size is picked per style", () => 
   assert.throws(() => reduce(state, "upsertBrand", { brand: { ...brand, styleSizes: [{ style: "", size: "3–6M" }] } }, ctx));
   assert.throws(() => reduce(state, "upsertBrand", { brand: { ...brand, styleSizes: Array(9).fill({ style: "a", size: "b" }) } }, ctx));
 });
+
+test("current obsessions: owner-only, strict, ordered, dated only on real changes", async () => {
+  const { reduce } = require("../logic");
+  const ctx = { isOwner: true, now: 1000 };
+  let { state } = reduce(null, "init", {}, ctx);
+  const items = [
+    { id: "obs_00000001", emoji: "🦒", label: "Giraffes", note: "" },
+    { id: "obs_00000002", emoji: "", label: "Teethers", note: "anything crinkly" },
+  ];
+  ({ state } = reduce(state, "setObsessions", { items }, ctx));
+  assert.deepEqual(state.obsessions.items.map((o) => o.label), ["Giraffes", "Teethers"]);
+  assert.equal(state.obsessions.updatedAt, 1000);
+  const again = reduce(state, "setObsessions", { items }, { isOwner: true, now: 2000 });
+  assert.equal(again.changed, false, "saving the same list doesn't move the date");
+  ({ state } = reduce(state, "setObsessions", { items: [items[1], items[0]] }, { isOwner: true, now: 3000 }));
+  assert.equal(state.obsessions.items[0].label, "Teethers", "reorder is saved");
+  assert.equal(state.obsessions.updatedAt, 3000);
+  assert.throws(() => reduce(state, "setObsessions", { items }, { isOwner: false, now: 1 }), /owner/i);
+  assert.throws(() => reduce(state, "setObsessions", { items: [{ ...items[0], link: "x" }] }, ctx), /Unexpected/);
+  assert.throws(() => reduce(state, "setObsessions", { items: [{ ...items[0], label: "" }] }, ctx));
+  assert.throws(() => reduce(state, "setObsessions", { items: [{ ...items[0], emoji: "<b>" }] }, ctx));
+  assert.throws(() => reduce(state, "setObsessions", { items: Array.from({ length: 31 }, (_, i) => ({ id: `obs_${String(i).padStart(8, "0")}`, label: "x" })) }, ctx));
+  // guests see it in the public view
+  const { publicView } = require("../logic");
+  assert.equal(publicView(state).obsessions.items.length, 2);
+  const r = await call("setObsessions", { items });
+  assert.equal(r.status, 403, "a guest can't change it through the API");
+});
+
+test("setPhoto saves the picked image and product link on that record only", () => {
+  const { reduce } = require("../logic");
+  const ctx = { isOwner: true, now: 1 };
+  let { state } = reduce(null, "init", {}, ctx);
+  ({ state } = reduce(state, "upsertPrint", { print: { id: "print_00000001", brand: "Little Sleepies", printName: "Bunny Meadow", types: ["Zippy"] } }, ctx));
+  ({ state } = reduce(state, "setPhoto", { kind: "prints", id: "print_00000001", image: "https://cdn.shopify.com/a.jpg", url: "https://littlesleepies.com/products/x" }, ctx));
+  assert.equal(state.prints.print_00000001.image, "https://cdn.shopify.com/a.jpg");
+  assert.equal(state.prints.print_00000001.url, "https://littlesleepies.com/products/x");
+  ({ state } = reduce(state, "setPhoto", { kind: "prints", id: "print_00000001", image: "https://cdn.shopify.com/b.jpg", url: "https://other.example.com/p" }, ctx));
+  assert.equal(state.prints.print_00000001.image, "https://cdn.shopify.com/b.jpg");
+  assert.equal(state.prints.print_00000001.url, "https://littlesleepies.com/products/x", "an existing product link is kept");
+  assert.throws(() => reduce(state, "setPhoto", { kind: "prints", id: "print_00000001", image: "javascript:alert(1)" }, ctx));
+  assert.throws(() => reduce(state, "setPhoto", { kind: "brands", id: "print_00000001", image: "https://a.com/x.jpg" }, ctx));
+  assert.throws(() => reduce(state, "setPhoto", { kind: "prints", id: "print_00000009", image: "https://a.com/x.jpg" }, ctx), /anymore/);
+  assert.throws(() => reduce(state, "setPhoto", { kind: "prints", id: "print_00000001", image: "https://a.com/x.jpg" }, { isOwner: false, now: 1 }), /owner/i);
+});
+
+test("brand store website is stored as a bare hostname", () => {
+  const { reduce } = require("../logic");
+  const ctx = { isOwner: true, now: 1 };
+  let { state } = reduce(null, "init", {}, ctx);
+  ({ state } = reduce(state, "upsertBrand", { brand: { id: "brand_site0001", name: "Little Sleepies", currentSize: "", notes: "", site: "https://www.LittleSleepies.com/collections/all" } }, ctx));
+  assert.equal(state.brands.brand_site0001.site, "littlesleepies.com");
+  assert.throws(() => reduce(state, "upsertBrand", { brand: { id: "brand_site0001", name: "x", currentSize: "", notes: "", site: "not a site" } }, ctx));
+});

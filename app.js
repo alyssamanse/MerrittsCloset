@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1010-0750";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1010-0750";
-const BUILD = "1010-0750"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1011-0826";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1011-0826";
+const BUILD = "1011-0826"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = ["wishlist", "closet", "sizes"];
@@ -769,7 +769,123 @@ function sizesView() {
     <div class="section-title"><h2>Her Colors</h2>${owner() ? `<button class="link" data-act="edit-colors">Edit</button>` : ""}</div>
     ${herColors().length
       ? `<div class="swatches">${herColors().map((c) => `<div class="swatch"><i style="background:${esc(c.hex)}"></i>${esc(c.name)}</div>`).join("")}</div>`
-      : `<div class="empty">${owner() ? "No colors yet. Tap Edit to add some." : "No colors listed yet."}</div>`}`;
+      : `<div class="empty">${owner() ? "No colors yet. Tap Edit to add some." : "No colors listed yet."}</div>`}
+    ${obsessionsSection()}`;
+}
+
+// ── Current Obsessions (Sizes page, under Her Colors) ───────────────
+// Simple chips: optional emoji, a short label, an optional note. Guests read; the owner edits.
+const obsessions = () => S.data.obsessions?.items || [];
+const fmtDay = (t) => new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+function obsessionsSection() {
+  const list_ = obsessions();
+  if (!list_.length && !owner()) return "";
+  const at = S.data.obsessions?.updatedAt;
+  return `
+    <section class="obsessions-wrap" aria-labelledby="obs-h">
+      <div class="section-title"><h2 id="obs-h">Current Obsessions</h2>${owner() ? `<button class="link" data-act="edit-obsessions">Edit</button>` : ""}</div>
+      <p class="muted obs-sub">What ${esc(CONFIG.nickname || CONFIG.babyName)} is loving these days.</p>
+      ${list_.length
+        ? `<ul class="obsessions">${list_.map((o) => `<li class="obs-chip">${o.emoji ? `<span class="obs-emoji" aria-hidden="true">${esc(o.emoji)}</span>` : ""}<span class="obs-text"><b>${esc(o.label)}</b>${o.note ? `<span class="obs-note">${esc(o.note)}</span>` : ""}</span></li>`).join("")}</ul>
+           ${at ? `<p class="muted obs-updated">Updated ${fmtDay(at)}</p>` : ""}`
+        : `<div class="empty">Nothing yet. Tap Edit to add what she's into.</div>`}
+    </section>`;
+}
+const MAX_OBSESSIONS = 30;
+function obsessionsSheet() {
+  let rows = obsessions().map((o) => ({ ...o }));
+  const rowHtml = (o, i) => `
+    <div class="obs-row" data-i="${i}">
+      <button type="button" class="drag-handle" data-m="drag" aria-label="Drag to reorder ${esc(o.label || "entry")} (or use arrow keys)">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="7" cy="5" r="1.4"/><circle cx="13" cy="5" r="1.4"/><circle cx="7" cy="10" r="1.4"/><circle cx="13" cy="10" r="1.4"/><circle cx="7" cy="15" r="1.4"/><circle cx="13" cy="15" r="1.4"/></svg>
+      </button>
+      <input class="in obs-emoji-in" data-f="emoji" maxlength="16" value="${esc(o.emoji || "")}" placeholder="🙂" aria-label="Emoji (optional)" />
+      <div class="obs-fields">
+        <input class="in" data-f="label" maxlength="40" value="${esc(o.label || "")}" placeholder="Teethers" aria-label="Label" />
+        <input class="in obs-note-in" data-f="note" maxlength="80" value="${esc(o.note || "")}" placeholder="Note (optional), like anything crinkly" aria-label="Note (optional)" />
+      </div>
+      <button type="button" class="icon-btn danger" data-m="remove" aria-label="Remove ${esc(o.label || "entry")}">×</button>
+    </div>`;
+  openSheet(
+    `<h2>Current Obsessions</h2>
+     <p class="muted">What ${esc(CONFIG.nickname || CONFIG.babyName)} is loving these days. Drag the dots to reorder.</p>
+     <div class="obs-list"></div>
+     <button class="btn ghost small" data-m="add">+ Add</button>
+     <div class="err sheet-err" hidden></div>
+     <div class="sheet-actions"><span class="spacer"></span>
+       <button class="btn ghost" data-act="cancel">Cancel</button>
+       <button class="btn" data-act="save">Save</button></div>`,
+    (el) => {
+      const listEl = el.querySelector(".obs-list"), addBtn = el.querySelector('[data-m="add"]');
+      const draw = () => {
+        listEl.innerHTML = rows.length ? rows.map(rowHtml).join("") : `<p class="muted">Nothing yet. Tap Add.</p>`;
+        addBtn.disabled = rows.length >= MAX_OBSESSIONS;
+      };
+      draw();
+      listEl.addEventListener("input", (ev) => {
+        const i = Number(ev.target.closest(".obs-row")?.dataset.i);
+        if (!Number.isNaN(i) && ev.target.dataset.f) rows[i][ev.target.dataset.f] = ev.target.value;
+      });
+      listEl.addEventListener("click", (ev) => {
+        const b = ev.target.closest('[data-m="remove"]'); if (!b) return;
+        rows.splice(Number(b.closest(".obs-row").dataset.i), 1); draw();
+      });
+      // Keyboard reorder on the handle (arrow keys).
+      listEl.addEventListener("keydown", (ev) => {
+        const h = ev.target.closest('[data-m="drag"]'); if (!h || !["ArrowUp", "ArrowDown"].includes(ev.key)) return;
+        ev.preventDefault();
+        const i = Number(h.closest(".obs-row").dataset.i), j = ev.key === "ArrowUp" ? i - 1 : i + 1;
+        if (j < 0 || j >= rows.length) return;
+        [rows[i], rows[j]] = [rows[j], rows[i]]; draw();
+        listEl.querySelector(`.obs-row[data-i="${j}"] [data-m="drag"]`)?.focus();
+      });
+      // Touch/mouse drag on the handle: the row follows the finger and the list reorders live.
+      listEl.addEventListener("pointerdown", (ev) => {
+        const h = ev.target.closest('[data-m="drag"]'); if (!h) return;
+        ev.preventDefault();
+        const row = h.closest(".obs-row");
+        h.setPointerCapture(ev.pointerId);
+        row.classList.add("dragging");
+        const startY = ev.clientY;
+        let from = Number(row.dataset.i), to = from;
+        const rects = [...listEl.querySelectorAll(".obs-row")].map((r) => r.getBoundingClientRect());
+        const move = (e) => {
+          const dy = e.clientY - startY;
+          row.style.transform = `translateY(${dy}px)`;
+          const mid = rects[from].top + rects[from].height / 2 + dy;
+          to = rects.findIndex((r) => mid < r.top + r.height / 2);
+          if (to < 0) to = rects.length - 1;
+          listEl.querySelectorAll(".obs-row").forEach((r, k) => {
+            if (k === from) return;
+            const shift = from < to && k > from && k <= to ? -rects[from].height - 8 : from > to && k >= to && k < from ? rects[from].height + 8 : 0;
+            r.style.transform = shift ? `translateY(${shift}px)` : "";
+          });
+        };
+        const end = () => {
+          h.removeEventListener("pointermove", move);
+          h.removeEventListener("pointerup", end);
+          h.removeEventListener("pointercancel", end);
+          if (to !== from) { const [r] = rows.splice(from, 1); rows.splice(to, 0, r); }
+          draw();
+        };
+        h.addEventListener("pointermove", move);
+        h.addEventListener("pointerup", end);
+        h.addEventListener("pointercancel", end);
+      });
+      addBtn.addEventListener("click", () => {
+        rows.push({ id: newId(), emoji: "", label: "", note: "" }); draw();
+        listEl.querySelector('.obs-row:last-child [data-f="label"]')?.focus();
+      });
+      el.querySelector('[data-act="cancel"]').addEventListener("click", () => closeSheet());
+      wireSave(el, async () => {
+        const clean = rows.map((o) => ({ id: o.id, emoji: (o.emoji || "").trim(), label: (o.label || "").trim(), note: (o.note || "").trim() }))
+          .filter((o) => o.label || o.emoji || o.note);
+        if (clean.some((o) => !o.label)) throw new Error("Give every entry a label, or remove it.");
+        await store.setObsessions(clean);
+        return "Saved";
+      });
+    }
+  );
 }
 
 // Owner reminder: babies outgrow sizes fast, and "Fits Now" + sold-out checks rely on these.
@@ -881,25 +997,93 @@ async function runStockCheck({ quiet }) {
   finally { busy.delete("stock"); stockProgress = ""; render(); }
 }
 
-// ── find photos for closet prints (owner) ────────────────────────────
-let photoProgress = "";
-const photoTargets = () => list(S.data?.prints).filter((p) => p.url && !p.image);
+// ── find photos (owner) ─────────────────────────────────────────────
+// Searches each brand's own store, then the web (on the server), shows up to 3 photos,
+// and saves only the one she taps, with its product link. Manual photo entry still works.
+const photoTargets = () => [
+  ...list(S.data?.prints).filter((p) => !safeUrl(p.image)).map((p) => ({ kind: "prints", rec: p, name: p.printName || "Untitled print" })),
+  ...list(S.data?.toys).filter((t) => !safeUrl(t.image)).map((t) => ({ kind: "toys", rec: t, name: t.name || "Untitled" })),
+];
 function photoButton() {
   const n = photoTargets().length;
-  if (!n && !busy.has("photos")) return "";
-  return `<button class="link" data-act="find-photos" ${dis("photos")}>${busy.has("photos") ? photoProgress || "Finding…" : `Find Photos (${n})`}</button>`;
+  return n ? `<button class="link" data-act="find-photos">Find Photos (${n})</button>` : "";
 }
-async function runFindPhotos() {
-  if (busy.has("photos")) return;
-  const ids = photoTargets().map((p) => p.id);
-  if (!ids.length) return;
-  busy.add("photos"); render();
+// One search's result → HTML for the choices (shared by the picker and the edit form).
+function photoChoicesHtml(r) {
+  if (r.state === "searching") return `<p class="muted pf-msg">Searching…</p>`;
+  if (r.state === "error") return `<p class="pf-msg err-text">${esc(r.msg)} <button class="link" data-m="search">Try again</button></p>`;
+  if (r.state !== "done") return "";
+  if (!r.choices.length) {
+    const why = r.webConfigured === false ? "No match in the brand's store, and web search isn't set up yet." : "No photos found.";
+    return `<p class="muted pf-msg">${why} <button class="link" data-m="manual">Add one yourself</button></p>`;
+  }
+  return `<div class="pf-choices" role="group" aria-label="Pick a photo">${r.choices.map((c, k) => `
+    <button type="button" class="pf-choice" data-m="pick" data-k="${k}" aria-label="Use this photo${c.title ? `: ${esc(c.title)}` : ""}">
+      <img src="${esc(c.image)}" alt="" referrerpolicy="no-referrer" loading="lazy" onerror="this.closest('.pf-choice').hidden=true">
+      <span>${esc(c.title || hostOf(c.url))}</span><small>${c.source === "store" ? "Brand's store" : hostOf(c.url)}</small>
+    </button>`).join("")}</div>`;
+}
+const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
+async function searchInto(r, kind, id, redraw) {
+  r.state = "searching"; redraw();
   try {
-    const found = await inChunks(ids, (part) => store.findPhotos(part), (p) => { photoProgress = `Finding ${p}`; render(); });
-    const noLink = list(S.data.prints).filter((p) => !p.url && !p.image).length;
-    toast(`Found ${found} ${found === 1 ? "photo" : "photos"}.${noLink ? ` ${noLink} prints have no link: tap one to paste its product link.` : ""}`);
-  } catch (e) { toast(e?.message || "Couldn't find photos right now."); }
-  finally { busy.delete("photos"); photoProgress = ""; render(); }
+    const out = await store.searchPhotos(kind, id);
+    Object.assign(r, { state: "done", choices: out.choices || [], webConfigured: out.webConfigured });
+  } catch (e) {
+    Object.assign(r, { state: "error", msg: e?.retryAfter ? `Busy, try again in ${Math.ceil(e.retryAfter)} seconds.` : e?.message || "Couldn't search right now." });
+  }
+  redraw();
+}
+function photoPickerSheet() {
+  const targets = photoTargets();
+  const res = {}; // id → { state, choices, msg }
+  const rowHtml = (t) => {
+    const r = res[t.rec.id] || {};
+    return `<div class="pf-row" data-id="${t.rec.id}" data-kind="${t.kind}">
+      <div class="pf-head"><div><b>${esc(t.name)}</b>${t.rec.brand ? `<span class="muted"> · ${esc(t.rec.brand)}</span>` : ""}</div>
+        ${r.state === "searching" ? "" : `<button class="link" data-m="search">${r.state === "done" ? "Search again" : "Search"}</button>`}</div>
+      ${photoChoicesHtml(r)}
+    </div>`;
+  };
+  openSheet(
+    `<h2>Find Photos</h2>
+     <p class="muted">Searches each brand's own store first, then the web. Nothing is saved until you tap a photo.</p>
+     <button class="btn ghost small" data-m="next5">Search the next 5</button>
+     <div class="pf-list"></div>
+     <div class="sheet-actions"><span class="spacer"></span><button class="btn ghost" data-act="cancel">Done</button></div>`,
+    (el) => {
+      const listEl = el.querySelector(".pf-list");
+      let left = [...targets];
+      const draw = () => { listEl.innerHTML = left.length ? left.map(rowHtml).join("") : `<p class="muted">Every print and toy has a photo now.</p>`; el.querySelector('[data-m="next5"]').hidden = !left.some((t) => !res[t.rec.id]); };
+      const drawRow = (t) => { const n = listEl.querySelector(`.pf-row[data-id="${t.rec.id}"]`); if (n) n.outerHTML = rowHtml(t); };
+      const find = (id) => left.find((t) => t.rec.id === id);
+      draw();
+      el.querySelector('[data-m="next5"]').addEventListener("click", async (ev) => {
+        const btn = ev.currentTarget; btn.disabled = true;
+        // One at a time: the server allows a few searches a minute.
+        for (const t of left.filter((x) => !res[x.rec.id]).slice(0, 5)) { res[t.rec.id] = {}; await searchInto(res[t.rec.id], t.kind, t.rec.id, () => drawRow(t)); }
+        btn.disabled = false; draw();
+      });
+      listEl.addEventListener("click", async (ev) => {
+        const b = ev.target.closest("[data-m]"); if (!b) return;
+        const row = b.closest(".pf-row"), t = find(row?.dataset.id); if (!t) return;
+        if (b.dataset.m === "search") { res[t.rec.id] = {}; return searchInto(res[t.rec.id], t.kind, t.rec.id, () => drawRow(t)); }
+        if (b.dataset.m === "manual") {
+          closeSheet(false);
+          return itemSheet(t.kind === "prints" ? { dest: "closet", cat: "clothes", existing: t.rec } : { dest: "closet", cat: hasCat(t.rec), existing: t.rec });
+        }
+        if (b.dataset.m === "pick") {
+          const c = res[t.rec.id].choices[Number(b.dataset.k)];
+          row.querySelectorAll(".pf-choice").forEach((x) => (x.disabled = true));
+          try {
+            await store.setPhoto(t.kind, t.rec.id, c.image, c.url);
+            left = left.filter((x) => x !== t); draw(); toast("Photo saved");
+          } catch (e) { res[t.rec.id] = { state: "error", msg: e?.message || "Couldn't save that photo." }; drawRow(t); }
+        }
+      });
+      el.querySelector('[data-act="cancel"]').addEventListener("click", () => closeSheet());
+    }
+  );
 }
 
 // ── shopping ahead (occasion sizing) ─────────────────────────────────
@@ -1610,6 +1794,7 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
     </div>
     <div class="err" id="import-err" hidden></div>
     <div class="preview"><img id="pv" src="${esc(safeUrl(e.image) || PLACEHOLDER)}" alt="" referrerpolicy="no-referrer" onerror="this.src='${PLACEHOLDER}'"><span class="muted">The photo comes from the link, or paste an image address below.</span></div>
+    ${isEdit && !hidden ? `<div class="pf-inline"><button type="button" class="link" data-m="search">Search for a photo</button><div id="f-photo-results"></div></div>` : ""}
 
     <div data-show="wc wt wo ct co">
       <label class="f" for="f-title">Name</label>
@@ -1690,6 +1875,25 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
     }
     wireTypeControls(el, "Up to 8 styles per print");
     f("image").addEventListener("change", () => (el.querySelector("#pv").src = safeUrl(f("image").value) || PLACEHOLDER));
+    // "Search for a photo": choices fill in the photo (and the link, if it has none); Save keeps them.
+    const pfBox = el.querySelector(".pf-inline");
+    if (pfBox) {
+      const r = {};
+      const kind = () => (dest === "closet" ? (cat === "clothes" ? "prints" : "toys") : "items");
+      const draw = () => { el.querySelector("#f-photo-results").innerHTML = photoChoicesHtml(r); };
+      pfBox.addEventListener("click", (ev) => {
+        const b = ev.target.closest("[data-m]"); if (!b) return;
+        if (b.dataset.m === "search") return searchInto(r, kind(), e.id, draw);
+        if (b.dataset.m === "manual") return f("image").focus();
+        if (b.dataset.m === "pick") {
+          const c = r.choices[Number(b.dataset.k)];
+          f("image").value = c.image; el.querySelector("#pv").src = c.image;
+          if (!f("url").value.trim()) f("url").value = c.url;
+          pfBox.querySelectorAll(".pf-choice").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+          toast("Photo chosen. Tap Save to keep it");
+        }
+      });
+    }
     // Brand's saved size fills in only when it's the right kind (shoe size for shoes, clothing size otherwise).
     const fillBrandSize = () => {
       const b = brandByName(f("brand").value);
@@ -1789,6 +1993,7 @@ function brandSheet(existing = null) {
      <div id="b-styles"></div>
      <button type="button" class="btn ghost small" data-m="add-style">+ Add a style size</button>
      <datalist id="dl-styles">${typesFor("clothes").map((t) => `<option value="${esc(t)}">`).join("")}</datalist>
+     <label class="f" for="b-site">Store website <span class="muted">(optional, helps Find Photos)</span></label><input class="in" id="b-site" name="site" maxlength="100" inputmode="url" value="${esc(b.site || "")}" placeholder="littlesleepies.com" />
      <label class="f" for="b-notes">Sizing note (optional)</label><input class="in" id="b-notes" name="notes" maxlength="140" value="${esc(b.notes || "")}" placeholder="Runs small, size up" />
      <datalist id="dl-sizes">${sizeOptions()}</datalist>
      <div class="err sheet-err" hidden></div>
@@ -1824,7 +2029,7 @@ function brandSheet(existing = null) {
           if (!style || !size) throw new Error("Each style size needs both a style and a size.");
           styleSizes.push({ style, size });
         }
-        const d = { id: recordId, name: v("name"), currentSize: v("currentSize"), notes: v("notes"), ...(styleSizes.length && { styleSizes }) };
+        const d = { id: recordId, name: v("name"), currentSize: v("currentSize"), notes: v("notes"), ...(styleSizes.length && { styleSizes }), ...(v("site") && { site: v("site") }) };
         if (!d.name) throw new Error("The brand needs a name.");
         await store.upsertBrand(d);
         return "Saved";
@@ -1973,8 +2178,9 @@ $app.addEventListener("click", (ev) => {
     case "add-brand": return brandSheet();
     case "import-list": return importSheet();
     case "edit-colors": return colorsSheet();
+    case "edit-obsessions": return obsessionsSheet();
     case "check-stock": return runStockCheck({ quiet: false });
-    case "find-photos": return runFindPhotos();
+    case "find-photos": return photoPickerSheet();
     case "add-plan": return planSheet(t.dataset.preset ? presetPlan(t.dataset.preset) : null);
     case "edit-plan": return planSheet((S.data.plans || []).find((p) => p.id === id));
     case "pick-plan": filter.plan = id; return render();

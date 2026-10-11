@@ -19,6 +19,7 @@ const admin = require("firebase-admin");
 const { reduce, sizeForStyle, brandKey, reducePrivate, PRIVATE_ACTIONS, publicView, Limiter, RATES, ApiError, GUEST_ACTIONS, OWNER_ACTIONS } = require("./logic");
 const crypto = require("crypto");
 const { importLink, checkStock } = require("./importer");
+const { findPhotoChoices } = require("./photos");
 
 const ENV = {
   wishlistId: process.env.WISHLIST_ID || "",
@@ -120,6 +121,29 @@ functions.http("api", async (req, res) => {
           sizes: (r.sizes || []).slice(0, 30).map((s) => trim(s, 20)),
           fromArchive: !!r.fromArchive,
         },
+      });
+    }
+
+    // Find Photos search: up to 3 photo choices for one record. Reads only; saving is "setPhoto".
+    if (action === "searchPhotos") {
+      if (!owner) throw new ApiError(403, "Only the owner can do that.");
+      limit("lookups", RATES.lookups);
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new ApiError(400, "Bad request");
+      for (const k of Object.keys(payload)) if (k !== "kind" && k !== "id") throw new ApiError(400, `Unexpected field "${k}"`);
+      const kind = { prints: "prints", items: "items", toys: "toys" }[payload.kind];
+      if (!kind || typeof payload.id !== "string" || !/^[A-Za-z0-9_-]{2,40}$/.test(payload.id)) throw new ApiError(400, "Bad request");
+      const snap = await db.collection("wishlists").doc(ENV.wishlistId).get();
+      if (!snap.exists) throw new ApiError(404, "This wishlist isn't set up yet.");
+      const doc = snap.data();
+      const rec = doc[kind]?.[payload.id];
+      if (!rec) throw new ApiError(404, "That isn't in the list anymore.");
+      const name = kind === "prints" ? rec.printName : kind === "toys" ? rec.name : rec.printName || rec.title;
+      const brandRec = Object.values(doc.brands || {}).find((b) => brandKey(b.name) === brandKey(rec.brand));
+      const r = await findPhotoChoices({ brand: rec.brand || "", name: name || "", url: rec.url || "", site: brandRec?.site || "" }, { key: process.env.BRAVE_API_KEY || "" });
+      return res.json({
+        ok: true,
+        choices: r.choices.map((c) => ({ image: trim(c.image, 600), url: trim(c.url, 600), title: trim(c.title, 120), source: c.source })),
+        searched: r.searched, webConfigured: r.webConfigured,
       });
     }
 
