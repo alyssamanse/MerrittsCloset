@@ -8,13 +8,14 @@ const { get, importLink } = require("./importer");
 const { brandKey } = require("./logic");
 
 // Brand → store website. Matched by brandKey ("Kyte Baby Co" = "Kyte Baby"). A brand's own
-// "Store website" field overrides this. Not every store here is guaranteed to be Shopify: a
-// store that doesn't answer the Shopify search just falls through to web search.
+// "Store website" field overrides this. Checked Oct 2026: all the stores below are Shopify
+// (Little One Shop confirmed from its order emails: Shop Pay + Judge.me). A store that stops
+// answering the Shopify search just falls through to web search.
 const STORE_SITES = {
   "little sleepies": "littlesleepies.com",
-  "simple seed": "simpleseedbabyco.com",
+  "simple seed": "simpleseedbaby.com",
   "sleepy sloth": "thesleepysloth.com",
-  "little one": "littleoneshopco.com",
+  "little one": "littleoneshop.com",
   "copper pearl": "copperpearl.com",
   "kyte": "kytebaby.com",
   "posh peanut": "poshpeanut.com",
@@ -24,10 +25,9 @@ const STORE_SITES = {
   "swimzip": "swimzip.com",
   "angel dear": "angeldear.com",
   "goumi": "goumikids.com",
-  "quincy mae": "quincymae.com",
+  "quincy mae": "ryleeandcru.com",   // quincymae.com now redirects here (Rylee + Cru)
   "solly": "sollybaby.com",
   "jamie kay": "jamiekay.com",
-  "tiny kind": "tinykind.com",
   // Not Shopify: web search only, but knowing the site lets us prefer its results.
   "janie and jack": "janieandjack.com",
   "carters": "carters.com",
