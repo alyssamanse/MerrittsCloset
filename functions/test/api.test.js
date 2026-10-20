@@ -546,3 +546,11 @@ test("brand store website is stored as a bare hostname", () => {
   assert.equal(state.brands.brand_site0001.site, "littlesleepies.com");
   assert.throws(() => reduce(state, "upsertBrand", { brand: { id: "brand_site0001", name: "x", currentSize: "", notes: "", site: "not a site" } }, ctx));
 });
+
+
+test("a list can have two owners; anyone else is still refused", async () => {
+  const ok = await call("upsertItem", { item: item("item_twoowner1") }, { token: "owner2" });
+  assert.equal(ok.status, 200, "second owner can edit");
+  assert.equal((await call("upsertItem", { item: item("item_twoowner2") }, { token: "stranger" })).status, 403);
+  assert.equal((await call("upsertItem", { item: item("item_twoowner3") }, { token: "spoof" })).status, 403, "unverified / non-Google sign-in refused");
+});

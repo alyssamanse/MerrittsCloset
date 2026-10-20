@@ -62,7 +62,8 @@ const SITES = {
     babyName: "Luca",
     nickname: "",
     ownerName: "his family",                       // "Only <ownerName> can see who's waiting"
-    ownerEmail: "",                                // TODO: Luca's mom's Google account (display only)
+    // Who can edit (display only; the server's OWNER_EMAIL is the real check). Add Luca's mom's Gmail here.
+    ownerEmail: ["alyssamanse@gmail.com"],
     wishlistId: "w_8nq00X41XkIsTMvl5GJT",
     apiUrl: "https://luca-api-767635696368.us-central1.run.app",
     appCheckSiteKey: "",

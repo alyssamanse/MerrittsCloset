@@ -10,7 +10,7 @@
 //   • Retries are capped (2) with backoff, only for transient errors, and every
 //     change is idempotent on the server, so a retry can't double a write.
 //   • Identical in-flight requests are merged (double taps send one request).
-import { CONFIG } from "./config.js?v=1020-1515";
+import { CONFIG } from "./config.js?v=1020-1520";
 
 const SDK = "https://www.gstatic.com/firebasejs/11.0.2";
 const CACHE_KEY = `closet:${CONFIG.wishlistId}`;
@@ -74,7 +74,9 @@ export async function createFirebaseStore() {
   const inflight = new Map();
 
   const emit = (patch) => { state = { ...state, ...patch }; notify(state); };
-  const isOwnerUser = (u) => !!u && (u.email || "").toLowerCase() === CONFIG.ownerEmail.toLowerCase();
+  // ownerEmail can be one address or a list (a list run by two people). Display only: the API does the real check.
+  const owners = [].concat(CONFIG.ownerEmail || []).map((e) => e.toLowerCase());
+  const isOwnerUser = (u) => !!u && owners.includes((u.email || "").toLowerCase());
 
   async function setData(data, fromCache = false) {
     if (!fromCache && data) storage.set(CACHE_KEY, { at: Date.now(), data });
@@ -200,7 +202,7 @@ export async function createFirebaseStore() {
     },
     async signInOwner() {
       const provider = new fa.GoogleAuthProvider();
-      provider.setCustomParameters({ login_hint: CONFIG.ownerEmail, prompt: "select_account" });
+      provider.setCustomParameters({ ...(owners.length === 1 && { login_hint: owners[0] }), prompt: "select_account" });
       try { await fa.signInWithPopup(auth, provider); }
       catch (e) { if (String(e.code).includes("popup")) await fa.signInWithRedirect(auth, provider); else throw e; }
     },
@@ -343,7 +345,7 @@ export function createDemoStore() {
     mode: "demo",
     start(cb) { notify = cb; emit(); },
     refresh: async () => true,
-    signInOwner: m(() => { user = { isOwner: true, email: CONFIG.ownerEmail }; }),
+    signInOwner: m(() => { user = { isOwner: true, email: [].concat(CONFIG.ownerEmail)[0] }; }),
     signOut: m(() => { user = null; }),
     claim: m((id, from = "") => { if (data.claims[id]?.h) throw new FriendlyError("Someone already claimed this one."); data.claims[id] = { h: "mine", at: Date.now() }; mine.add(id); if (from) priv.givers[id] = { from, at: Date.now() }; }),
     unclaim: m((id) => { data.claims[id] = { h: null, at: Date.now() }; mine.delete(id); delete priv.givers[id]; }),

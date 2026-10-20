@@ -27,6 +27,7 @@ const fakeAdmin = {
   auth: () => ({
     async verifyIdToken(t) {
       if (t === "owner") return { uid: "u1", email: "owner@example.com", email_verified: true, firebase: { sign_in_provider: "google.com" } };
+      if (t === "owner2") return { uid: "u4", email: "second.owner@example.com", email_verified: true, firebase: { sign_in_provider: "google.com" } };
       if (t === "stranger") return { uid: "u2", email: "someone@example.com", email_verified: true, firebase: { sign_in_provider: "google.com" } };
       if (t === "spoof") return { uid: "u3", email: "owner@example.com", email_verified: false, firebase: { sign_in_provider: "password" } };
       throw new Error("bad token");
@@ -37,7 +38,7 @@ const fakeAdmin = {
 require.cache[require.resolve("firebase-admin")] = { id: "fa", filename: "fa", loaded: true, exports: fakeAdmin };
 
 Object.assign(process.env, {
-  WISHLIST_ID: "w_test1234", OWNER_EMAIL: "owner@example.com",
+  WISHLIST_ID: "w_test1234", OWNER_EMAIL: "owner@example.com, Second.Owner@example.com",
   ALLOWED_ORIGINS: "https://site.example", REQUIRE_APP_CHECK: "true",
 });
 require(path.join(__dirname, "..", "index.js"));

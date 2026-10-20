@@ -25,7 +25,8 @@ const { OAuth2Client } = require("google-auth-library");
 
 const ENV = {
   wishlistId: process.env.WISHLIST_ID || "",
-  ownerEmail: (process.env.OWNER_EMAIL || "").toLowerCase(),
+  // One or more owner Google accounts, comma-separated (e.g. a list run by two people).
+  ownerEmails: (process.env.OWNER_EMAIL || "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
   ownerUid: process.env.OWNER_UID || "",                 // optional: pin to one account once known
   requireAppCheck: process.env.REQUIRE_APP_CHECK === "true",
   origins: (process.env.ALLOWED_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean),
@@ -78,8 +79,7 @@ async function isOwner(req) {
   let t;
   try { t = await admin.auth().verifyIdToken(raw, true); } catch { throw new ApiError(401, "Please sign in again."); }
   const ok =
-    !!ENV.ownerEmail &&
-    (t.email || "").toLowerCase() === ENV.ownerEmail &&
+    ENV.ownerEmails.includes((t.email || "").toLowerCase()) &&
     t.email_verified === true &&
     t.firebase?.sign_in_provider === "google.com" &&
     (!ENV.ownerUid || t.uid === ENV.ownerUid);
@@ -159,7 +159,7 @@ functions.http("api", async (req, res) => {
   if (req.method === "OPTIONS") return res.status(allowed ? 204 : 403).send("");
 
   try {
-    if (!ENV.wishlistId || !ENV.ownerEmail) throw new ApiError(503, "The wishlist isn't configured yet.");
+    if (!ENV.wishlistId || !ENV.ownerEmails.length) throw new ApiError(503, "The wishlist isn't configured yet.");
     if (!allowed) throw new ApiError(403, "Not allowed from this site.");
     if (req.method !== "POST") throw new ApiError(405, "POST only");
     if (Number(req.get("content-length") || 0) > MAX_BODY || Buffer.byteLength(JSON.stringify(req.body || {})) > MAX_BODY) {
