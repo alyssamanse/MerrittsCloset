@@ -15,10 +15,18 @@ WORK=$(mktemp -d)
 git clone -q --depth 1 https://github.com/alyssamanse/MerrittsCloset.git "$WORK/code" || { echo "Couldn't download the code."; exit 1; }
 cd "$WORK/code"
 
+# Run as the same service account as Merritt's server (closet-api), and make sure that account
+# can read the email key.
+RUNTIME_SA=$(gcloud run services describe closet-api --region "$REGION" --format='value(spec.template.spec.serviceAccountName)' 2>/dev/null)
+RUNTIME_SA=${RUNTIME_SA:-767635696368-compute@developer.gserviceaccount.com}
+echo "Using account: $RUNTIME_SA"
+gcloud secrets add-iam-policy-binding resend-api-key --quiet \
+  --member="serviceAccount:$RUNTIME_SA" --role=roles/secretmanager.secretAccessor >/dev/null 2>&1 || true
+
 say "2/4 Creating Luca's server (takes 3–5 minutes, keep this tab open)…"
 gcloud run deploy luca-api --source functions --function api --base-image nodejs22 \
   --region "$REGION" --allow-unauthenticated --max-instances 1 --timeout 300 --quiet \
-  --service-account 767635696368-compute@developer.gserviceaccount.com \
+  --service-account "$RUNTIME_SA" \
   --set-env-vars "^;^WISHLIST_ID=w_8nq00X41XkIsTMvl5GJT;OWNER_EMAIL=alyssamanse@gmail.com;ALLOWED_ORIGINS=https://alyssamanse.github.io;BABY_NAME=Luca;SITE_TITLE=Luca's Wishlist;SITE_URL=https://alyssamanse.github.io/MerrittsCloset/luca/;ALERT_FROM=Luca's Wishlist <alerts@alerts.merrittjean.com>;ALERT_ACCENT=#2E5E7E;CRON_AUDIENCE=$URL/cron/daily" \
   --set-secrets RESEND_API_KEY=resend-api-key:latest || { echo "The server step failed. Copy the lines above and send them to Claude."; exit 1; }
 
