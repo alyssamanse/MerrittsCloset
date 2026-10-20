@@ -10,7 +10,7 @@
 //   • Retries are capped (2) with backoff, only for transient errors, and every
 //     change is idempotent on the server, so a retry can't double a write.
 //   • Identical in-flight requests are merged (double taps send one request).
-import { CONFIG } from "./config.js?v=1020-1457";
+import { CONFIG } from "./config.js?v=1020-1509";
 
 const SDK = "https://www.gstatic.com/firebasejs/11.0.2";
 const CACHE_KEY = `closet:${CONFIG.wishlistId}`;
@@ -317,7 +317,9 @@ export function createDemoStore() {
     ] }],
     claims: { i2: { h: "someone-else", at: now } },
   };
-  const mine = new Set(["i3"]);
+  // Other sites (e.g. Luca's wishlist) preview as a brand-new, empty list.
+  if (CONFIG.site && CONFIG.site !== "merritt") Object.assign(data, { items: {}, claims: {}, family: {}, prints: {}, toys: {}, brands: {}, plans: [], styleFavs: {}, obsessions: null });
+  const mine = new Set(CONFIG.site && CONFIG.site !== "merritt" ? [] : ["i3"]);
   data.typeLists = {};
   const DEMO_DEFAULTS = {
     clothes: ["Zippy", "Shorty", "Footie", "Romper", "Bodysuit", "Two-piece PJs", "Two-piece daywear", "Pajamas", "Dress", "Bubble", "Swim", "Outerwear", "Separates", "Swaddle", "Sleep bag", "Blanket", "Bib", "Hat", "Bow", "Shoes", "Accessory"],
@@ -330,6 +332,7 @@ export function createDemoStore() {
   let notify = () => {};
   // Owner-only private data (gifter names, thank-yous), like the server's private document.
   const priv = { alerts: { i10: [{ e: "grandma@example.com", at: now }] }, drafts: { d1: { id: "d1", category: "toy", title: "Wooden Play Kitchen", brand: "Hape", price: "$129", priority: "nice", image: img("#EADFD3", "#A7B8A0"), createdAt: now } }, givers: { i3: { from: "Aunt Jen", at: now } }, thanks: { th1: { id: "th1", itemId: "", title: "Wooden Rattle", from: "Grandma Sue", at: now - 86400000 * 3, done: false } } };
+  if (CONFIG.site && CONFIG.site !== "merritt") Object.assign(priv, { drafts: {}, givers: {}, thanks: {}, alerts: {} });
   const addThank = (title, from) => { const tid = `th${Math.random().toString(36).slice(2, 8)}`; priv.thanks[tid] = { id: tid, itemId: "", title, from, at: Date.now(), done: false }; };
   for (const b of Object.values(data.brands)) b.sizeAt = now;
   const firstBrand = Object.values(data.brands)[0]; if (firstBrand) firstBrand.sizeAt = now - 86400000 * 75; // shows the reminder

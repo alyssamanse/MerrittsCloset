@@ -226,7 +226,18 @@ const openSheet = async (p, sel, expectTitle) => {
     must(await l.locator("[data-to=family]").count() === 0, "family link shown");
     must((await l.locator("h1.logo").innerText()).toLowerCase().includes("luca"), "logo isn't Luca's");
     must(await l.locator(".chip.top").count() === 0, "closet badges on a wishlist-only site");
-    must((await l.locator(".wl-fold[data-wl=soldout] .hidden-note").innerText()).includes("his size"), "wording not his");
+  });
+  await step("Luca's page: owner adds the example gifts in one tap", async () => {
+    const lo = await page(browser, "luca/?demo&admin");
+    const s = lo.locator("[data-act=signin]"); if (await s.count()) { await s.first().click(); await lo.waitForTimeout(400); }
+    must(await lo.locator("[data-act=add-starters]").count() === 1, "no example-gifts button on an empty list");
+    await lo.click("[data-act=add-starters]");
+    await lo.waitForFunction(() => document.querySelectorAll("article.card").length >= 10, null, { timeout: 30000 }).catch(() => {});
+    const n = await lo.locator("article.card").count();
+    must(n === 10, `expected 10 example gifts, got ${n}`);
+    must((await lo.locator("article.card").first().innerText()).includes("Example: keep or delete"), "examples aren't labeled");
+    must(await lo.locator("[data-act=receive]").first().innerText() === "Received", "received label");
+    await lo.close();
   });
   await step("no script errors anywhere", async () => must(!errors.length, errors.join(" | ")));
   await browser.close();

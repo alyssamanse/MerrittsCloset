@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1020-1457";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1020-1457";
-const BUILD = "1020-1457"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1020-1509";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1020-1509";
+const BUILD = "1020-1509"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = CONFIG.tabs || ["wishlist", "closet", "sizes"];
@@ -292,6 +292,7 @@ function wishlistView() {
         <button data-act="wl-view" data-v="grid" aria-pressed="${wlGrid}" aria-label="Tiles"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="11" y="3" width="6" height="6" rx="1"/><rect x="3" y="11" width="6" height="6" rx="1"/><rect x="11" y="11" width="6" height="6" rx="1"/></svg></button>
       </div>
     </div>
+    ${owner() && (busy.has("starters") || (!all.length && !list(S.private?.drafts).length)) && (CONFIG.starterItems || []).length ? starterCard() : ""}
     ${owner() ? thanksView() : ""}
     ${sections || `<div class="empty">${wlBudget !== "any" ? "Nothing in that price range right now." : "Nothing here right now."}</div>`}`;
 }
@@ -358,6 +359,35 @@ function claimSheet(id) {
       btn.addEventListener("click", () => { if (btn.disabled) btn.textContent = "Saving…"; });
     }
   );
+}
+
+// Empty list, owner signed in: offer a ready-made set of example gifts to keep or delete.
+let starterProgress = "";
+function starterCard() {
+  const n = CONFIG.starterItems.length;
+  return `<div class="admin-card starter-card">
+    <b>Want a head start?</b>
+    <span class="muted">Add ${n} popular gift ideas for ${esc(CONFIG.babyName)}'s age, with photos and prices from each store. Keep the ones you like and delete the rest.</span>
+    <button class="btn" data-act="add-starters" ${dis("starters")}>${busy.has("starters") ? starterProgress || "Adding…" : `Add ${n} Example Gifts`}</button>
+  </div>`;
+}
+async function addStarters() {
+  if (busy.has("starters")) return;
+  busy.add("starters"); render();
+  let added = 0;
+  try {
+    for (const [k, x] of CONFIG.starterItems.entries()) {
+      starterProgress = `Adding ${k + 1} of ${CONFIG.starterItems.length}…`; render();
+      let image = "", price = x.price || "";
+      try { const r = await store.importLink(x.url); image = r?.image || ""; price = price || r?.price || ""; } catch { /* no photo: fine, it can be added later */ }
+      await store.upsertItem({ id: newId(), category: "toy", title: x.title, brand: x.brand, type: x.type, price, priority: "nice",
+        notes: "Example: keep or delete", url: x.url, image });
+      added++;
+    }
+    toast(`Added ${added} example gifts. Edit or delete any of them.`);
+  } catch (e) {
+    toast(added ? `Added ${added}. ${e?.message || "The rest didn't save."}` : e?.message || "Couldn't add them right now.");
+  } finally { busy.delete("starters"); starterProgress = ""; render(); }
 }
 
 function stockBanner(all, soldOut) {
@@ -2207,6 +2237,7 @@ $app.addEventListener("click", (ev) => {
   switch (t.dataset.act) {
     case "claim": return claimSheet(id);
     case "notify": return notifySheet(id);
+    case "add-starters": return addStarters();
     case "share-item": return shareItem(id);
     case "undo-delete": return act("undo", () => store.undoBulkDelete(), "Restored");
     case "backup": return downloadBackup();
