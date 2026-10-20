@@ -58,3 +58,14 @@ jobs:
           # Surface the reason on the run's summary page if it fails.
           if [ "$status" -ne 0 ]; then grep -v '^\s*$' deploy.log | tail -n 12 | sed 's/^/::error::/'; fi
           exit $status
+
+      - name: Deploy luca-api (Luca's wishlist server, same code), once it exists
+        # Created once by hand (see README); until then this step just says so and moves on.
+        shell: bash
+        run: |
+          if gcloud run services describe luca-api --region us-central1 --project merrittscloset-4d74f >/dev/null 2>&1; then
+            gcloud run deploy luca-api --source functions --function api --base-image nodejs22 \
+              --region us-central1 --project merrittscloset-4d74f --quiet
+          else
+            echo "luca-api isn't set up yet (or the deploy account can't see it); skipping."
+          fi

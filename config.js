@@ -5,7 +5,7 @@
 //  function, not from hiding these values.
 // ─────────────────────────────────────────────────────────────
 
-export const CONFIG = {
+const MERRITT = {
   babyName: "Merritt",
   nickname: "Mer",           // used in friendly lines like "What Mer is loving these days"
   // Who gifters are thanking (shown when they add their name to a claim).
@@ -51,3 +51,34 @@ export const CONFIG = {
     appId: "1:767635696368:web:00654bf18eda920b077035",
   },
 };
+
+// ─────────────────────────────────────────────────────────────
+//  Other wishlists served by the same app (one codebase, separate data,
+//  separate server copy). A site is picked by the page that loads it:
+//  /MerrittsCloset/luca/ sets window.CLOSET_SITE = "luca".
+// ─────────────────────────────────────────────────────────────
+const SITES = {
+  luca: {
+    babyName: "Luca",
+    nickname: "",
+    ownerName: "his family",                       // "Only <ownerName> can see who's waiting"
+    ownerEmail: "",                                // TODO: Luca's mom's Google account (display only)
+    wishlistId: "w_8nq00X41XkIsTMvl5GJT",
+    apiUrl: "https://luca-api-767635696368.us-central1.run.app",
+    appCheckSiteKey: "",
+    siteUrl: "https://alyssamanse.github.io/MerrittsCloset/luca/",
+    title: "Luca's Wishlist",
+    logoSub: "Wishlist",
+    tagline: "Gift ideas for Luca, and a way to make sure nobody doubles up",
+    tabs: ["wishlist"],                            // wishlist only: no closet, sizes or family pages
+    family: [],
+    pronoun: { her: "his", she: "he" },
+    monogram: "L",
+    crestIcon: "boat",
+    palette: [],
+    firebase: MERRITT.firebase,                   // same Firebase project
+  },
+};
+
+const siteKey = (typeof window !== "undefined" && window.CLOSET_SITE) || "";
+export const CONFIG = SITES[siteKey] ? { ...MERRITT, ...SITES[siteKey], site: siteKey } : { ...MERRITT, site: "merritt" };

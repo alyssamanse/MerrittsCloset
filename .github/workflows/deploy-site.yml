@@ -55,6 +55,7 @@ jobs:
         run: |
           mkdir _site
           cp index.html app.js store.js config.js *.png _site/
+          cp -r luca _site/       # Luca's wishlist (built from index.html by build_sites.py)
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

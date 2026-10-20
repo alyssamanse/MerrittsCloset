@@ -1,10 +1,12 @@
-import { CONFIG } from "./config.js?v=1020-1045";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1020-1045";
-const BUILD = "1020-1045"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1020-1457";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1020-1457";
+const BUILD = "1020-1457"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
-const MAIN_TABS = ["wishlist", "closet", "sizes"];
-const TABS = [...MAIN_TABS, "family"]; // "family" is reached from the footer link, not the tab bar
+const MAIN_TABS = CONFIG.tabs || ["wishlist", "closet", "sizes"];
+const HAS_CLOSET = MAIN_TABS.includes("closet");
+const PR = { her: "her", she: "she", ...(CONFIG.pronoun || {}) }; // "his"/"he" on a boy's list
+const TABS = [...MAIN_TABS, ...((CONFIG.family || []).length ? ["family"] : [])]; // "family" is reached from the footer link, not the tab bar
 const TAB_LABEL = { wishlist: "Wishlist", closet: "Closet", sizes: "Sizes" };
 const OTHER_TYPES = ["Blanket", "Swaddle", "Lovey", "Bedding", "Bath", "Feeding", "Books", "Room decor", "Gear", "Keepsake"];
 const TOY_TYPES = ["Rattle", "Teether", "Stacker", "Blocks", "Book", "Plush", "Bath", "Music", "Activity", "Push & ride", "Puzzle", "Pretend play", "Outdoor"];
@@ -65,15 +67,20 @@ const img = (src, cls = "", alt = "") =>
 const CREST = `<svg viewBox="0 0 96 104" width="88" height="96">
   <circle cx="48" cy="56" r="40" fill="none" stroke="currentColor" stroke-width="1"/>
   <circle cx="48" cy="56" r="35.5" fill="none" stroke="currentColor" stroke-width=".5" opacity=".55"/>
-  <g transform="translate(37 4)">
+${CONFIG.crestIcon === "boat" ? `  <g transform="translate(36 2)" aria-hidden="true">
+    <path d="M12 2 L12 17 L3 17 Z" fill="#F4F1EA" stroke="#9FB4C2" stroke-width=".8"/>
+    <path d="M13.5 5 L13.5 17 L21 17 Z" fill="#CFDDE6" stroke="#9FB4C2" stroke-width=".8"/>
+    <path d="M1.5 19 H22.5 L19.5 23.5 H4.5 Z" fill="#C9A27E"/>
+    <path d="M0 25.5 q3 -2 6 0 t6 0 t6 0 t6 0" fill="none" stroke="#7FA6BE" stroke-width="1.2"/>
+  </g>` : `  <g transform="translate(37 4)">
     <circle cx="4" cy="5" r="3.6" fill="#C9AE97"/><circle cx="18" cy="5" r="3.6" fill="#C9AE97"/>
     <circle cx="4" cy="5" r="1.7" fill="#F3E6D8"/><circle cx="18" cy="5" r="1.7" fill="#F3E6D8"/>
     <ellipse cx="11" cy="11" rx="8.6" ry="8" fill="#C9AE97"/>
     <ellipse cx="11" cy="14" rx="4.2" ry="3.2" fill="#F3E6D8"/>
     <circle cx="7.6" cy="9.6" r="1" fill="#3A2E30"/><circle cx="14.4" cy="9.6" r="1" fill="#3A2E30"/>
     <ellipse cx="11" cy="12.8" rx="1.5" ry="1.1" fill="#3A2E30"/>
-  </g>
-  <text x="48" y="73" text-anchor="middle" font-family="'Cormorant Garamond', Georgia, serif" font-style="italic" font-weight="500" font-size="50" fill="currentColor">M</text>
+  </g>`}
+  <text x="48" y="73" text-anchor="middle" font-family="'Cormorant Garamond', Georgia, serif" font-style="italic" font-weight="500" font-size="50" fill="currentColor">${esc(CONFIG.monogram || CONFIG.babyName[0])}</text>
 </svg>`;
 const BEAR = `<svg width="46" height="40" viewBox="0 0 46 40" aria-hidden="true">
   <circle cx="9" cy="9" r="7.5" fill="#CBAE93"/><circle cx="37" cy="9" r="7.5" fill="#CBAE93"/>
@@ -154,13 +161,13 @@ function render() {
     ${isDemo ? `<div class="demo-bar">Preview with sample data. Nothing here is saved.</div>` : ""}
     <header class="hero">
       <div class="crest" aria-hidden="true">${CREST}</div>
-      <h1 class="logo" aria-label="${name}'s Closet"><span class="logo-name">${name}'s</span><span class="logo-sub">Closet</span></h1>
-      <p>Her wishes, her favorites, and what she already has</p>
+      <h1 class="logo" aria-label="${name}'s ${esc(CONFIG.logoSub || "Closet")}"><span class="logo-name">${name}'s</span><span class="logo-sub">${esc(CONFIG.logoSub || "Closet")}</span></h1>
+      <p>${esc(CONFIG.tagline || "Her wishes, her favorites, and what she already has")}</p>
     </header>
-    <nav class="tabs" role="tablist">
+    ${MAIN_TABS.length > 1 ? `<nav class="tabs" role="tablist">
       <button class="nav-mark" data-act="to-top" aria-label="${name}'s Closet, back to top" tabindex="-1"><i>M</i></button>
       ${MAIN_TABS.map((t) => `<button class="tab" role="tab" aria-selected="${tab === t}" data-tab="${t}">${TAB_LABEL[t]}</button>`).join("")}
-    </nav>
+    </nav>` : `<div class="tabs-spacer"></div>`}
     <main>${adminPanel()}${safeBody()}</main>
     ${owner() && S.status === "ok" && !(selectMode && tab === "closet") ? `<button class="btn fab" data-act="add">+ Add</button>` : ""}
     ${owner() && selectMode && tab === "closet" ? bulkBar() : ""}
@@ -270,7 +277,7 @@ function wishlistView() {
     wlSection("clothes", "Clothes", of("clothes"), clothesInner(of("clothes"))),
     wlSection("toy", "Toys", of("toy"), of("toy").map((i) => itemCard(i)).join("")),
     wlSection("other", "Other", of("other"), of("other").map((i) => itemCard(i)).join("")),
-    wlSection("soldout", "Sold Out Right Now", soldOutNow, `<p class="muted hidden-note">${owner() ? "Guests can ask to be emailed once when one of these is back in her size." : "Tap Notify me and we'll email you once when it's back in her size."}</p>` + soldOutNow.map((i) => itemCard(i)).join("")),
+    wlSection("soldout", "Sold Out Right Now", soldOutNow, `<p class="muted hidden-note">${owner() ? `Guests can ask to be emailed once when one of these is back in ${PR.her} size.` : `Tap Notify me and we'll email you once when it's back in ${PR.her} size.`}</p>` + soldOutNow.map((i) => itemCard(i)).join("")),
     wlSection("claimed", "Already Claimed", claimed, claimed.map((i) => itemCard(i)).join(""), { open: false }),
   ].join("");
   return `
@@ -370,6 +377,7 @@ const ago = (t) => {
 
 // Does her closet already have this print (same brand + print name)?
 function closetMatch(i) {
+  if (!HAS_CLOSET) return null; // wishlist-only sites have no closet to compare with
   if (isToy(i) || !(i.printName || "").trim()) return null;
   const bk = brandKey(i.brand), pn = i.printName.trim().toLowerCase();
   return list(S.data.prints).find((p) => brandKey(p.brand) === bk && (p.printName || "").trim().toLowerCase() === pn) || null;
@@ -379,6 +387,7 @@ function closetMatch(i) {
 const sameBrandOrUnset = (a, b) => !brandKey(a) || !brandKey(b) || brandKey(a) === brandKey(b);
 const words = (t) => String(t || "").toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter(Boolean);
 function topPrint(i) {
+  if (!HAS_CLOSET) return null;
   if (isToy(i) || !(i.printName || "").trim()) return null;
   const pn = words(i.printName).join(" ");
   return list(S.data.prints).find((p) => p.favorite && words(p.printName).join(" ") === pn && sameBrandOrUnset(p.brand, i.brand)) || null;
@@ -386,6 +395,7 @@ function topPrint(i) {
 // A favorite style matches when every word of its name appears somewhere in the wish's
 // name, type, print or note, in any order ("Short-Long Romper" = "short long romper").
 function topStyle(i) {
+  if (!HAS_CLOSET) return null;
   const hay = new Set(words(`${i.title} ${i.type} ${i.printName} ${i.notes}`));
   return list(S.data.styleFavs).find((f) => {
     const w = words(f.name);
@@ -403,7 +413,7 @@ function notifySheet(id) {
      <p class="muted"><b>${esc(it.title || "This item")}</b>${size ? ` in ${esc(size)}` : ""}</p>
      <label class="f" for="nt-email">Your email</label>
      <input class="in" id="nt-email" type="email" inputmode="email" autocomplete="email" maxlength="254" placeholder="you@example.com" />
-     <p class="muted nt-note">We'll email you once, the first time it's back${size ? " in her size" : ""}, then delete your address. Only ${esc(CONFIG.ownerName || "the family")} can see who's waiting.</p>
+     <p class="muted nt-note">We'll email you once, the first time it's back${size ? ` in ${PR.her} size` : ""}, then delete your address. Only ${esc(CONFIG.ownerName || "the family")} can see who's waiting.</p>
      <div class="err sheet-err" hidden></div>
      <div class="sheet-actions"><span class="spacer"></span>
        <button class="btn ghost" data-act="cancel">Cancel</button>
@@ -464,7 +474,7 @@ function itemCard(i, { inMost = false, draft = false } = {}) {
         : `<span class="status taken">Open</span>`}
       <span class="spacer"></span>
       <button class="link" data-act="edit-item" data-id="${i.id}">Edit</button>
-      <button class="btn small soft" data-act="receive" data-id="${i.id}" ${dis(k("receive"))}>${busy.has(k("receive")) ? "Moving…" : ({ toy: "Received → Toys", other: "Received → Has", clothes: "Received → Closet" })[catOf(i)]}</button>`;
+      <button class="btn small soft" data-act="receive" data-id="${i.id}" ${dis(k("receive"))}>${busy.has(k("receive")) ? "Moving…" : !HAS_CLOSET ? "Received" : ({ toy: "Received → Toys", other: "Received → Has", clothes: "Received → Closet" })[catOf(i)]}</button>`;
   } else if (i.stock === "out" && !claimed && !mine) {
     actions = notifiedOf(i.id)
       ? `<span class="status">✓ We'll email you when it's back</span><span class="spacer"></span><button class="link" data-act="claim" data-id="${i.id}" ${dis(k("claim"))}>I'll get it anyway</button>`
@@ -481,7 +491,7 @@ function itemCard(i, { inMost = false, draft = false } = {}) {
   const hasLine = has
     ? `<div class="has-print">${has.outgrown
         ? `She had this print and outgrew it, so a bigger size is perfect.`
-        : `She has this print${(has.types || []).length ? ` as a ${esc(has.types.join(", "))}` : ""}.${i.type && (has.types || []).some((t) => t.toLowerCase() === i.type.toLowerCase()) ? " Same style, so only if it's a bigger size." : ""}`}</div>`
+        : `${PR.she[0].toUpperCase() + PR.she.slice(1)} has this print${(has.types || []).length ? ` as a ${esc(has.types.join(", "))}` : ""}.${i.type && (has.types || []).some((t) => t.toLowerCase() === i.type.toLowerCase()) ? " Same style, so only if it's a bigger size." : ""}`}</div>`
     : "";
 
   return `
@@ -1518,7 +1528,7 @@ async function forceUpdate() {
 }
 
 // ── share ────────────────────────────────────────────────────────────
-const SITE_URL = "https://alyssamanse.github.io/MerrittsCloset/";
+const SITE_URL = CONFIG.siteUrl || "https://alyssamanse.github.io/MerrittsCloset/";
 const FAMILY_URL = `${SITE_URL}#family`;
 async function copyOrShare({ title, text, url }) {
   if (navigator.share) {
@@ -1574,7 +1584,7 @@ function shareSheet() {
         try { await navigator.clipboard.writeText(FAMILY_URL); ev.target.textContent = "Copied"; }
         catch { const i = el.querySelector("#share-fam"); i.focus(); i.select(); }
       });
-      el.querySelector('[data-m="native"]')?.addEventListener("click", () => navigator.share({ title: `${CONFIG.babyName}'s Closet`, text: `${CONFIG.babyName}'s wishlist and closet`, url: SITE_URL }).catch(() => {}));
+      el.querySelector('[data-m="native"]')?.addEventListener("click", () => navigator.share({ title: CONFIG.title || `${CONFIG.babyName}'s Closet`, text: HAS_CLOSET ? `${CONFIG.babyName}'s wishlist and closet` : `${CONFIG.babyName}'s wishlist`, url: SITE_URL }).catch(() => {}));
     }
   );
 }
@@ -1824,7 +1834,7 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
   const html = `
     <h2>${isEdit ? title[dest[0] + cat[0]] : "Add Something"}</h2>
     ${isEdit ? "" : `
-      <div class="seg"><button type="button" data-dest="wishlist" aria-pressed="${dest === "wishlist"}">Wishlist</button><button type="button" data-dest="closet" aria-pressed="${dest === "closet"}">She has it</button></div>
+      <div class="seg"${HAS_CLOSET ? "" : " hidden"}><button type="button" data-dest="wishlist" aria-pressed="${dest === "wishlist"}">Wishlist</button><button type="button" data-dest="closet" aria-pressed="${dest === "closet"}">She has it</button></div>
       <div class="seg"><button type="button" data-cat="clothes" aria-pressed="${cat === "clothes"}">Clothes</button><button type="button" data-cat="toy" aria-pressed="${cat === "toy"}">Toy</button><button type="button" data-cat="other" aria-pressed="${cat === "other"}">Other</button></div>`}
     <label class="f" for="f-url">Product link</label>
     <div class="import">
@@ -2295,7 +2305,7 @@ window.addEventListener("scroll", () => {
 }, { passive: true });
 
 // ── boot ─────────────────────────────────────────────────────────────
-document.title = `${CONFIG.babyName}'s Closet`;
+document.title = CONFIG.title || `${CONFIG.babyName}'s Closet`;
 render();
 checkForNewVersion();
 (async () => {

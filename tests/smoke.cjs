@@ -18,7 +18,7 @@ async function page(browser, query) {
   p.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource|net::|fonts\\.g/.test(m.text())) errors.push(`${query}: ${m.text()}`); });
   await p.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
   await p.goto(BASE + query);
-  await p.waitForSelector("nav.tabs");
+  await p.waitForSelector("main");
   await p.waitForTimeout(700);
   return p;
 }
@@ -218,6 +218,16 @@ const openSheet = async (p, sel, expectTitle) => {
   await step("Get Latest Version is there", async () => must(await o.locator("[data-act=force-update]").count() === 1, "missing"));
   await o.close();
 
+  console.log("Luca's wishlist");
+  const l = await page(browser, "luca/?demo");
+  await step("Luca's page: own name, wishlist only, his wording", async () => {
+    must((await l.title()) === "Luca's Wishlist", `title was ${await l.title()}`);
+    must(await l.locator("nav.tabs").count() === 0, "tab bar shown");
+    must(await l.locator("[data-to=family]").count() === 0, "family link shown");
+    must((await l.locator("h1.logo").innerText()).toLowerCase().includes("luca"), "logo isn't Luca's");
+    must(await l.locator(".chip.top").count() === 0, "closet badges on a wishlist-only site");
+    must((await l.locator(".wl-fold[data-wl=soldout] .hidden-note").innerText()).includes("his size"), "wording not his");
+  });
   await step("no script errors anywhere", async () => must(!errors.length, errors.join(" | ")));
   await browser.close();
   console.log(failed ? `\n${failed} check(s) failed` : "\nAll checks passed");

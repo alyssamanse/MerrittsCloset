@@ -7,6 +7,8 @@ const crypto = require("crypto");
 const SITE_URL = process.env.SITE_URL || "https://alyssamanse.github.io/MerrittsCloset/";
 const FROM = process.env.ALERT_FROM || "Merritt's Closet <alerts@alerts.merrittjean.com>";
 const MAX_TRIES = 3;
+const SITE_TITLE = process.env.SITE_TITLE || "";           // e.g. "Luca's Wishlist"
+const ACCENT = process.env.ALERT_ACCENT || "#8A5560";      // button / heading color
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const safeHttp = (u) => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : ""; } catch { return ""; } };
@@ -41,12 +43,12 @@ function buildEmail(item, babyName = "Merritt") {
   ].filter((l, i, a) => l || a[i - 1]).join("\n");
   const html = `<!doctype html><html><body style="margin:0;background:#FBF7F2;font-family:Helvetica,Arial,sans-serif;color:#3A2E30">
   <div style="max-width:520px;margin:0 auto;padding:28px 22px">
-    <p style="font-family:Georgia,serif;font-style:italic;font-size:22px;color:#8A5560;margin:0 0 18px">${esc(babyName)}'s Closet</p>
+    <p style="font-family:Georgia,serif;font-style:italic;font-size:22px;color:${ACCENT};margin:0 0 18px">${esc(SITE_TITLE || `${babyName}'s Closet`)}</p>
     <h1 style="font-size:20px;margin:0 0 10px">Back in stock${size ? ` in ${esc(size)}` : ""}</h1>
     <p style="font-size:16px;line-height:1.5;margin:0 0 18px"><b>${esc(title)}</b>${item.brand ? ` from ${esc(item.brand)}` : ""} is available again.</p>
     ${safeHttp(item.image) ? `<img src="${esc(item.image)}" alt="" width="200" style="display:block;width:200px;max-width:100%;border-radius:8px;margin:0 0 18px">` : ""}
-    <p style="margin:0 0 10px"><a href="${esc(itemLink)}" style="display:inline-block;background:#8A5560;color:#FFF8F2;text-decoration:none;font-weight:bold;padding:11px 18px;border-radius:6px">See it on the wishlist</a></p>
-    ${shop ? `<p style="margin:0 0 18px"><a href="${esc(shop)}" style="color:#8A5560">Go to the store</a></p>` : ""}
+    <p style="margin:0 0 10px"><a href="${esc(itemLink)}" style="display:inline-block;background:${ACCENT};color:#FFF8F2;text-decoration:none;font-weight:bold;padding:11px 18px;border-radius:6px">See it on the wishlist</a></p>
+    ${shop ? `<p style="margin:0 0 18px"><a href="${esc(shop)}" style="color:${ACCENT}">Go to the store</a></p>` : ""}
     <p style="font-size:14px;color:#8B7F7A;line-height:1.5;margin:18px 0 0">Tap “I'll get this” on the wishlist so nobody doubles up.</p>
     <p style="font-size:12.5px;color:#8B7F7A;line-height:1.5;margin:22px 0 0;border-top:1px solid #E9DFD7;padding-top:14px">You asked to be told once when this came back. This is that one email, and your address has now been deleted. If you didn't ask for this, you can ignore it; you won't hear from us again.</p>
   </div></body></html>`;
