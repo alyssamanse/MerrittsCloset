@@ -146,6 +146,12 @@ function cleanToy(t) {
   if (!["toy", "other"].includes(category)) bad("Category must be toy or other");
   return { id: id(t.id), category, name: str(t.name, "Name", 120, { required: true }), brand: str(t.brand, "Brand", 60), type: str(t.type, "Toy type", 24), url: url(t.url, "Link"), image: url(t.image, "Image") };
 }
+// A gifter's email for a back-in-stock alert: one plain address, lower-cased.
+function cleanEmail(v) {
+  const e = str(v, "Email", 254, { required: true }).toLowerCase();
+  if (!/^[^\s@<>"',;()]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(e)) bad("That email address doesn't look right.");
+  return e;
+}
 function cleanStyleFav(f) {
   onlyKeys(f, STYLE_FAV_FIELDS, "style");
   return { id: id(f.id), brand: str(f.brand, "Brand", 60), name: str(f.name, "Style name", 80, { required: true }), url: url(f.url, "Link"), image: url(f.image, "Image") };
@@ -195,7 +201,7 @@ const brandKey = (name) => {
 // (state | null, action, payload, { isOwner, now }) → { state, changed }
 // Every action changes at most one document. Repeating an action is a no-op
 // (changed: false → no write), which makes client retries safe.
-const GUEST_ACTIONS = new Set(["claim", "unclaim"]);
+const GUEST_ACTIONS = new Set(["claim", "unclaim", "subscribe"]);
 const OWNER_ACTIONS = new Set(["init", "setVisibility", "upsertBrand", "deleteBrand", "upsertItem", "deleteItem", "receive", "upsertPrint", "deletePrint", "upsertToy", "deleteToy", "setFavoriteStyles", "addType", "renameType", "deleteType", "resetClaim", "importBatch", "setColors", "setImages", "setPlan", "deletePlan", "setStock", "upsertFamilyItem", "deleteFamilyItem", "upsertStyleFav", "deleteStyleFav", "bulkCloset", "undoBulkDelete", "confirmSizes", "hideItem", "showItem", "setObsessions", "setPhoto"]);
 
 function reduce(prev, action, payload, { isOwner, now, priv = null }) {
@@ -546,6 +552,17 @@ function reduce(prev, action, payload, { isOwner, now, priv = null }) {
       break;
     }
 
+    case "subscribe": {
+      // "Notify me when it's back": validated here, stored ONLY in the owner-only private doc
+      // (reducePrivate). The public list never changes, so nothing about it is visible to anyone.
+      onlyKeys(p, ["itemId", "email"], "payload");
+      const it = state.items[id(p.itemId)];
+      if (!it) throw new ApiError(404, "That item isn't on the list anymore.");
+      if (state.claims[p.itemId]?.h) bad("Someone's already getting this one.");
+      if (it.stock !== "out") bad("Good news: it looks available right now!");
+      cleanEmail(p.email);
+      return same;
+    }
     case "setStock": {
       // Results of the server's own availability check (see index.js "checkStock").
       onlyKeys(p, ["results", "at"], "payload");
@@ -726,11 +743,12 @@ class Limiter {
 const PRIVATE_ACTIONS = new Set(["getPrivate", "setThank", "deleteThank", "addThank", "upsertDraft", "deleteDraft"]);
 const MAX_DRAFTS = 50;
 const MAX_OBSESSIONS = 30;
+const MAX_ALERTS_PER_ITEM = 25, MAX_ALERTS_TOTAL = 300;
 const MAX_THANKS = 200;
-const emptyPrivate = () => ({ givers: {}, thanks: {}, drafts: {} });
+const emptyPrivate = () => ({ givers: {}, thanks: {}, drafts: {}, alerts: {} });
 function reducePrivate(prevPriv, action, payload, { prevPublic, nextPublic, publicChanged, isOwner, now, newId }) {
   const priv = structuredClone(prevPriv || emptyPrivate());
-  priv.givers = priv.givers || {}; priv.thanks = priv.thanks || {}; priv.drafts = priv.drafts || {};
+  priv.givers = priv.givers || {}; priv.thanks = priv.thanks || {}; priv.drafts = priv.drafts || {}; priv.alerts = priv.alerts || {};
   const p = payload || {};
   const before = JSON.stringify(priv);
   const addThank = (title, from, itemId = "") => {
@@ -762,8 +780,20 @@ function reducePrivate(prevPriv, action, payload, { prevPublic, nextPublic, publ
       onlyKeys(p, ["title", "from"], "payload");
       addThank(str(p.title, "Gift", 120, { required: true }), str(p.from, "From", 40, { required: true }));
     }
+  } else if (action === "subscribe") {
+    // Waiting list for one item: unique addresses, capped per item and overall.
+    const iid = id(p.itemId), email = cleanEmail(p.email);
+    const list = priv.alerts[iid] || [];
+    if (!list.some((x) => x.e === email)) {
+      if (list.length >= MAX_ALERTS_PER_ITEM) bad("This one's waiting list is full.");
+      const total = Object.values(priv.alerts).reduce((n, l) => n + l.length, 0);
+      if (total >= MAX_ALERTS_TOTAL) bad("Alerts are full right now. Please check back later.");
+      priv.alerts[iid] = [...list, { e: email, at: now }];
+    }
   } else if (publicChanged) {
     const iid = p.itemId || p.id;
+    // The item left the public list (deleted, received, hidden): drop its waiting list, no email.
+    if (["deleteItem", "receive", "hideItem"].includes(action)) delete priv.alerts[iid];
     if (action === "claim") {
       const from = str(p.from, "Name", 40);
       if (from) priv.givers[iid] = { from, at: now }; else delete priv.givers[iid];
@@ -795,6 +825,7 @@ const RATES = {
   ownerWrites: 120,
   imports: 20,
   lookups: 8,         // Find photos / Check stock calls (each reads up to 10 store pages)
+  subscribePerIp: 5,  // "Notify me" sign-ups from one address
 };
 
-module.exports = { sizeForStyle, reducePrivate, PRIVATE_ACTIONS, emptyPrivate, brandKey, MAX_STOCK_RESULTS, DEFAULT_TYPES, reduce, publicView, Limiter, RATES, LIMITS, ApiError, claimHash, GUEST_ACTIONS, OWNER_ACTIONS };
+module.exports = { cleanEmail, sizeForStyle, reducePrivate, PRIVATE_ACTIONS, emptyPrivate, brandKey, MAX_STOCK_RESULTS, DEFAULT_TYPES, reduce, publicView, Limiter, RATES, LIMITS, ApiError, claimHash, GUEST_ACTIONS, OWNER_ACTIONS };

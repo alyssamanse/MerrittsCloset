@@ -5,6 +5,7 @@
   "engines": { "node": "22" },
   "dependencies": {
     "@google-cloud/functions-framework": "^3.4.0",
-    "firebase-admin": "^12.7.0"
+    "firebase-admin": "^12.7.0",
+    "google-auth-library": "^9.15.1"
   }
 }

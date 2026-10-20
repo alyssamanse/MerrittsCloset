@@ -548,6 +548,10 @@
   .pf-choice:disabled { opacity: .6; cursor: progress; }
   .pf-inline { margin: -4px 0 10px; }
   .pf-inline > .link { padding-left: 0; }
+  /* Sold out right now + notify me */
+  .card.soldout > img, .card.soldout > a > img, .card.soldout .thumb { filter: grayscale(.85); opacity: .7; }
+  .card.soldout .card-body h3, .card.soldout .card-body .meta { color: var(--taupe); }
+  .nt-note { font-size: 13px; margin: 8px 0 0; }
   /* Family page */
   .back-row { margin: -6px 0 4px; }
   .back-row .link { padding-left: 0; }
@@ -599,6 +603,6 @@
 </head>
 <body>
   <div id="app"></div>
-  <script type="module" src="app.js?v=1011-0826"></script>
+  <script type="module" src="app.js?v=1020-1045"></script>
 </body>
 </html>

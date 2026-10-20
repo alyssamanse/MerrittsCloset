@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1011-0826";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1011-0826";
-const BUILD = "1011-0826"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1020-1045";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1020-1045";
+const BUILD = "1020-1045"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = ["wishlist", "closet", "sizes"];
@@ -258,7 +258,8 @@ function wishlistView() {
   const openItems = shown.filter((i) => !isClaimed(i.id));
   const claimed = shown.filter((i) => isClaimed(i.id));
   const top = wlSort === "most" ? openItems.filter((i) => i.priority === "most" && i.stock !== "out") : [];
-  const rest = openItems.filter((i) => !top.includes(i));
+  const soldOutNow = openItems.filter((i) => i.stock === "out");
+  const rest = openItems.filter((i) => !top.includes(i) && !soldOutNow.includes(i));
   const of = (c) => rest.filter((i) => catOf(i) === c);
   const soldOut = all.filter((i) => i.stock === "out" && !isClaimed(i.id)).length;
   // Owner only: items hidden from guests while she's still deciding (kept in the private record).
@@ -269,6 +270,7 @@ function wishlistView() {
     wlSection("clothes", "Clothes", of("clothes"), clothesInner(of("clothes"))),
     wlSection("toy", "Toys", of("toy"), of("toy").map((i) => itemCard(i)).join("")),
     wlSection("other", "Other", of("other"), of("other").map((i) => itemCard(i)).join("")),
+    wlSection("soldout", "Sold Out Right Now", soldOutNow, `<p class="muted hidden-note">${owner() ? "Guests can ask to be emailed once when one of these is back in her size." : "Tap Notify me and we'll email you once when it's back in her size."}</p>` + soldOutNow.map((i) => itemCard(i)).join("")),
     wlSection("claimed", "Already Claimed", claimed, claimed.map((i) => itemCard(i)).join(""), { open: false }),
   ].join("");
   return `
@@ -390,6 +392,37 @@ function topStyle(i) {
     return w.length && w.every((x) => hay.has(x)) && sameBrandOrUnset(f.brand, i.brand);
   }) || null;
 }
+// "Notify me when it's back": remembered on this device so the button turns into a confirmation.
+const notifiedOf = (id) => { try { return localStorage.getItem(`closet:notify:${id}`) === "1"; } catch { return false; } };
+function notifySheet(id) {
+  const it = S.data.items?.[id];
+  if (!it) return;
+  const size = it.size ? (it.sizeFlexible ? `${it.size} or bigger` : it.size) : "";
+  openSheet(
+    `<h2>Notify Me When It's Back</h2>
+     <p class="muted"><b>${esc(it.title || "This item")}</b>${size ? ` in ${esc(size)}` : ""}</p>
+     <label class="f" for="nt-email">Your email</label>
+     <input class="in" id="nt-email" type="email" inputmode="email" autocomplete="email" maxlength="254" placeholder="you@example.com" />
+     <p class="muted nt-note">We'll email you once, the first time it's back${size ? " in her size" : ""}, then delete your address. Only ${esc(CONFIG.ownerName || "the family")} can see who's waiting.</p>
+     <div class="err sheet-err" hidden></div>
+     <div class="sheet-actions"><span class="spacer"></span>
+       <button class="btn ghost" data-act="cancel">Cancel</button>
+       <button class="btn" data-act="save">Notify Me</button></div>`,
+    (el) => {
+      const input = el.querySelector("#nt-email");
+      setTimeout(() => input.focus(), 50);
+      input.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); el.querySelector('[data-act="save"]').click(); } });
+      el.querySelector('[data-act="cancel"]').addEventListener("click", () => closeSheet());
+      wireSave(el, async () => {
+        const email = input.value.trim();
+        if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) throw new Error("That email address doesn't look right.");
+        await store.subscribe(id, email);
+        try { localStorage.setItem(`closet:notify:${id}`, "1"); } catch {}
+        return "You're on the list. We'll email you once.";
+      });
+    }
+  );
+}
 const giverOf = (id) => S.private?.givers?.[id]?.from || "";
 function itemCard(i, { inMost = false, draft = false } = {}) {
   const claimed = isClaimed(i.id);
@@ -415,6 +448,8 @@ function itemCard(i, { inMost = false, draft = false } = {}) {
   if (favStyle) chips.unshift(`<span class="chip top" title="${esc(favStyle.name)} is one of her favorite styles">★ Top Style</span>`);
   if (topPrint(i)) chips.unshift(`<span class="chip top" title="One of her favorite prints">★ Top Print</span>`);
   if (i.stock === "out") chips.unshift(`<span class="chip warn">Sold out online</span>`);
+  const waiting = owner() ? (S.private?.alerts?.[i.id] || []).length : 0;
+  if (waiting) chips.push(`<span class="chip moss">${waiting} waiting for it</span>`);
   const k = (a) => `${a}:${i.id}`;
 
   let actions;
@@ -430,6 +465,10 @@ function itemCard(i, { inMost = false, draft = false } = {}) {
       <span class="spacer"></span>
       <button class="link" data-act="edit-item" data-id="${i.id}">Edit</button>
       <button class="btn small soft" data-act="receive" data-id="${i.id}" ${dis(k("receive"))}>${busy.has(k("receive")) ? "Moving…" : ({ toy: "Received → Toys", other: "Received → Has", clothes: "Received → Closet" })[catOf(i)]}</button>`;
+  } else if (i.stock === "out" && !claimed && !mine) {
+    actions = notifiedOf(i.id)
+      ? `<span class="status">✓ We'll email you when it's back</span><span class="spacer"></span><button class="link" data-act="claim" data-id="${i.id}" ${dis(k("claim"))}>I'll get it anyway</button>`
+      : `<button class="link" data-act="claim" data-id="${i.id}" ${dis(k("claim"))}>I'll get it anyway</button><span class="spacer"></span><button class="btn small" data-act="notify" data-id="${i.id}">Notify me when it's back</button>`;
   } else if (mine) {
     actions = `<span class="status">✓ You're getting this</span><span class="spacer"></span><button class="btn small ghost" data-act="unclaim" data-id="${i.id}" ${dis(k("claim"))}>${busy.has(k("claim")) ? "Undoing…" : "Undo"}</button>`;
   } else if (claimed) {
@@ -446,7 +485,7 @@ function itemCard(i, { inMost = false, draft = false } = {}) {
     : "";
 
   return `
-    <article class="card ${claimed ? "claimed" : ""}${draft ? " draft" : ""}" id="item-${i.id}">
+    <article class="card ${claimed ? "claimed" : ""}${draft ? " draft" : ""}${i.stock === "out" && !claimed && !draft ? " soldout" : ""}" id="item-${i.id}">
       ${draft ? `<span class="ribbon hidden-ribbon">Hidden</span>` : i.priority === "most" && !claimed && !inMost ? `<span class="ribbon">Most Wanted</span>` : ""}
       ${link ? `<a href="${esc(link)}" target="_blank" rel="noopener noreferrer">${img(i.image, "thumb", i.title)}</a>` : img(i.image, "thumb", i.title)}
       <div class="card-body">
@@ -1500,7 +1539,7 @@ function openDeepLink() {
   if (!it && !fam) { toast("That item isn't on the list anymore"); return false; }
   if (it) {
     tab = "wishlist"; filter.wishlist = "all"; wlBudget = "any";
-    wlOpen[isClaimed(id) ? "claimed" : wlSort === "most" && it.priority === "most" && it.stock !== "out" ? "most" : catOf(it)] = true;
+    wlOpen[isClaimed(id) ? "claimed" : it.stock === "out" ? "soldout" : wlSort === "most" && it.priority === "most" ? "most" : catOf(it)] = true;
   } else {
     tab = "family"; filter.person = "all"; familyQuery = ""; openPeople.add(fam.person);
   }
@@ -2157,6 +2196,7 @@ $app.addEventListener("click", (ev) => {
   const id = t.dataset.id;
   switch (t.dataset.act) {
     case "claim": return claimSheet(id);
+    case "notify": return notifySheet(id);
     case "share-item": return shareItem(id);
     case "undo-delete": return act("undo", () => store.undoBulkDelete(), "Restored");
     case "backup": return downloadBackup();

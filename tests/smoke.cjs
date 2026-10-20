@@ -53,6 +53,17 @@ const openSheet = async (p, sel, expectTitle) => {
     must(await g.locator("[data-act=edit-obsessions]").count() === 0, "guest sees Edit");
     await tab(g, "wishlist");
   });
+  await step("Sold out: own section, notify me, remembered on this device", async () => {
+    const card = g.locator(".wl-fold[data-wl=soldout] #item-i10");
+    must(await card.count() === 1, "sold-out item not in Sold Out Right Now");
+    must(await g.locator(".wl-fold:not([data-wl=soldout]) #item-i10").count() === 0, "sold-out item also in another section");
+    await card.locator("[data-act=notify]").click(); await g.waitForTimeout(250);
+    await g.fill("#nt-email", "not-an-email"); await g.click('.sheet-bg [data-act="save"]'); await g.waitForTimeout(200);
+    must((await g.locator(".sheet-err").textContent()).includes("doesn't look right"), "bad email accepted");
+    await g.fill("#nt-email", "aunt.jen@example.com"); await g.click('.sheet-bg [data-act="save"]'); await g.waitForTimeout(600);
+    must((await g.locator("#item-i10").innerText()).includes("We'll email you"), "no confirmation on the card");
+    must(!(await g.locator("main").innerText()).toLowerCase().includes("aunt.jen"), "email shown on the page");
+  });
   await step("wishlist shows sections", async () => {
     must(await g.locator(".wl-fold[data-wl=most] .card").count() > 0, "no Most Wanted cards");
     must(await g.locator(".wl-fold[data-wl=claimed]").count() === 1, "no Already Claimed section");
@@ -157,6 +168,10 @@ const openSheet = async (p, sel, expectTitle) => {
     const after = await o.locator("[data-act=find-photos]").textContent().catch(() => "Find Photos (0)");
     must(parseInt(after.match(/\d+/)) === parseInt(n.match(/\d+/)) - 1, `${n} → ${after}`);
     await tab(o, "wishlist");
+  });
+  await step("owner sees how many are waiting", async () => {
+    await tab(o, "wishlist");
+    must((await o.locator("#item-i10").innerText()).includes("waiting for it"), "no waiting count for the owner");
   });
   await step("wishlist forms", async () => { await openSheet(o, "[data-act=add]", "Add"); await openSheet(o, "[data-act=add-thank]", "Thank"); });
   await step("closet: bulk delete and undo", async () => {

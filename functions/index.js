@@ -16,10 +16,12 @@
 
 const functions = require("@google-cloud/functions-framework");
 const admin = require("firebase-admin");
-const { reduce, sizeForStyle, brandKey, reducePrivate, PRIVATE_ACTIONS, publicView, Limiter, RATES, ApiError, GUEST_ACTIONS, OWNER_ACTIONS } = require("./logic");
+const { reduce, sizeForStyle, brandKey, MAX_STOCK_RESULTS, reducePrivate, PRIVATE_ACTIONS, publicView, Limiter, RATES, ApiError, GUEST_ACTIONS, OWNER_ACTIONS } = require("./logic");
 const crypto = require("crypto");
 const { importLink, checkStock } = require("./importer");
 const { findPhotoChoices } = require("./photos");
+const { sendDueAlerts } = require("./alerts");
+const { OAuth2Client } = require("google-auth-library");
 
 const ENV = {
   wishlistId: process.env.WISHLIST_ID || "",
@@ -27,7 +29,14 @@ const ENV = {
   ownerUid: process.env.OWNER_UID || "",                 // optional: pin to one account once known
   requireAppCheck: process.env.REQUIRE_APP_CHECK === "true",
   origins: (process.env.ALLOWED_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean),
+  // Daily check: only Cloud Scheduler, signing in as this service account, may start it.
+  cronEmail: process.env.CRON_SA || "closet-scheduler@merrittscloset-4d74f.iam.gserviceaccount.com",
+  cronAudience: process.env.CRON_AUDIENCE || "https://closet-api-767635696368.us-central1.run.app/cron/daily",
+  resendKey: process.env.RESEND_API_KEY || "",
+  babyName: process.env.BABY_NAME || "Merritt",
 };
+const CRON_ITEMS = 150, CRON_PARALLEL = 6, CRON_BUDGET_MS = 240000;
+const oidc = new OAuth2Client();
 const MAX_BODY = 16 * 1024;
 const LOOKUP_MAX = 10;
 
@@ -79,7 +88,65 @@ async function isOwner(req) {
 
 const trim = (s, n) => (typeof s === "string" ? s.slice(0, n) : "");
 
+// Stock for a set of wishlist items: sold out unless a size she can wear is available
+// (the item's own size, or bigger if "bigger size OK"; else her brand size or bigger).
+async function stockResults(doc, recs) {
+  const brandOf = (name) => Object.values(doc.brands || {}).find((b) => brandKey(b.name) === brandKey(name));
+  return Promise.all(recs.map(async (r) => ({
+    id: r.id,
+    stock: await checkStock(r.url, r.size || sizeForStyle(brandOf(r.brand), r.type, r.title), { orBigger: !r.size || !!r.sizeFlexible }).catch(() => "unknown"),
+  })));
+}
+async function saveStock(ref, results, at) {
+  for (let i = 0; i < results.length; i += MAX_STOCK_RESULTS) {
+    const part = results.slice(i, i + MAX_STOCK_RESULTS);
+    await db.runTransaction(async (tx) => {
+      const s2 = await tx.get(ref);
+      const { state, changed } = reduce(s2.exists ? s2.data() : null, "setStock", { results: part, at }, { isOwner: true, now: at });
+      if (changed) tx.set(ref, { ...state, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    }, { maxAttempts: 3 });
+  }
+}
+const alertRefs = () => { const ref = db.collection("wishlists").doc(ENV.wishlistId); return { ref, privRef: ref.collection("private").doc("owner") }; };
+const runAlerts = () => sendDueAlerts({ db, ...alertRefs(), key: ENV.resendKey, babyName: ENV.babyName })
+  .catch((e) => { console.error("alerts failed", e); return { sent: 0, error: true }; });
+
+// POST /cron/daily — Cloud Scheduler, once a day: check every unclaimed wishlist link, then email
+// anyone waiting for something that's back. Authenticated by a Google-signed ID token for one
+// specific service account; there is no other way in.
+async function cronDaily(req, res) {
+  try {
+    if (req.method !== "POST") throw new ApiError(405, "POST only");
+    const raw = (req.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+    if (!raw) throw new ApiError(401, "Not allowed");
+    let p;
+    try { p = (await oidc.verifyIdToken({ idToken: raw, audience: ENV.cronAudience })).getPayload(); } catch { throw new ApiError(401, "Not allowed"); }
+    if (!p || p.email !== ENV.cronEmail || p.email_verified !== true) throw new ApiError(403, "Not allowed");
+    if (!ENV.wishlistId) throw new ApiError(503, "Not configured");
+    const { ref } = alertRefs();
+    const snap = await ref.get();
+    if (!snap.exists) return res.json({ ok: true, checked: 0 });
+    const doc = snap.data();
+    // Oldest checks first, so a list too long for one run still gets fully covered over a few days.
+    const recs = Object.values(doc.items || {}).filter((r) => r.url && !doc.claims?.[r.id]?.h)
+      .sort((a, b) => (a.stockAt || 0) - (b.stockAt || 0)).slice(0, CRON_ITEMS);
+    const started = Date.now(), results = [];
+    for (let i = 0; i < recs.length && Date.now() - started < CRON_BUDGET_MS; i += CRON_PARALLEL) {
+      results.push(...await stockResults(doc, recs.slice(i, i + CRON_PARALLEL)));
+    }
+    await saveStock(ref, results, Date.now());
+    const alerts = await runAlerts();
+    console.log(`daily check: ${results.length} checked, ${alerts.sent || 0} alerts sent`);
+    return res.json({ ok: true, checked: results.length, out: results.filter((r) => r.stock === "out").length, alerts });
+  } catch (e) {
+    const status = e.status || 500;
+    if (status >= 500) console.error(e); else console.warn(`cron rejected ${status}: ${e.message}`);
+    return res.status(status).json({ ok: false, error: e.status ? e.message : "Something went wrong" });
+  }
+}
+
 functions.http("api", async (req, res) => {
+  if (req.path === "/cron/daily") return cronDaily(req, res);
   const origin = req.get("Origin") || "";
   const allowed = ENV.origins.includes(origin);
   if (allowed) {
@@ -175,8 +242,7 @@ functions.http("api", async (req, res) => {
       } else {
         // Sold out unless a size she can wear is available: the item's own size (or bigger, if
         // "bigger size OK"), else her current size for that brand or bigger.
-        const brandOf = (name) => Object.values(doc.brands || {}).find((b) => brandKey(b.name) === brandKey(name));
-        const results = await Promise.all(recs.map(async (r) => ({ id: r.id, stock: await checkStock(r.url, r.size || sizeForStyle(brandOf(r.brand), r.type, r.title), { orBigger: !r.size || !!r.sizeFlexible }).catch(() => "unknown") })));
+        const results = await stockResults(doc, recs);
         found = results.filter((r) => r.stock === "out").length;
         reduceAction = "setStock"; reducePayload = { results, at: Date.now() };
       }
@@ -187,6 +253,7 @@ functions.http("api", async (req, res) => {
         if (changed) tx.set(ref, { ...state, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
         return state;
       }, { maxAttempts: 3 });
+      if (action === "checkStock") await runAlerts(); // anything back in stock emails its waiting list
       return res.json({ ok: true, checked: recs.length, found, data: publicView(result) });
     }
 
@@ -210,6 +277,7 @@ functions.http("api", async (req, res) => {
       return res.json({ ok: true, private: priv || { givers: {}, thanks: {}, drafts: {} } });
     }
 
+    if (action === "subscribe") limit(`subscribe:${clientIp(req)}`, RATES.subscribePerIp);
     if (GUEST_ACTIONS.has(action)) limit("guest-writes", RATES.guestWrites);
     else if (OWNER_ACTIONS.has(action)) {
       if (!owner) throw new ApiError(403, "Only the owner can do that.");
@@ -219,7 +287,7 @@ functions.http("api", async (req, res) => {
     // The wishlist id comes from server config, never from the request,
     // so a caller cannot point this at any other document.
     // Only actions that can touch gifter names read the private doc.
-    const touchesPrivate = ["claim", "unclaim", "resetClaim", "deleteItem", "receive", "deleteFamilyItem", "hideItem", "showItem"].includes(action);
+    const touchesPrivate = ["claim", "unclaim", "resetClaim", "deleteItem", "receive", "deleteFamilyItem", "hideItem", "showItem", "subscribe"].includes(action);
     const out = await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const ps = touchesPrivate ? await tx.get(privRef) : null;

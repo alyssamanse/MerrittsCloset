@@ -10,7 +10,7 @@
 //   • Retries are capped (2) with backoff, only for transient errors, and every
 //     change is idempotent on the server, so a retry can't double a write.
 //   • Identical in-flight requests are merged (double taps send one request).
-import { CONFIG } from "./config.js?v=1011-0826";
+import { CONFIG } from "./config.js?v=1020-1045";
 
 const SDK = "https://www.gstatic.com/firebasejs/11.0.2";
 const CACHE_KEY = `closet:${CONFIG.wishlistId}`;
@@ -223,6 +223,7 @@ export async function createFirebaseStore() {
     importBatch: (prints, toys) => mutate("importBatch", { prints, toys }),
     setColors: (colors) => mutate("setColors", { colors }),
     setObsessions: (items) => mutate("setObsessions", { items }),
+    subscribe: (itemId, email) => mutate("subscribe", { itemId, email }),
     searchPhotos: (kind, id) => call("searchPhotos", { kind, id }),
     setPhoto: (kind, id, image, url) => mutate("setPhoto", { kind, id, image, url }),
     setPlan: (plan) => mutate("setPlan", { plan }),
@@ -270,6 +271,7 @@ export function createDemoStore() {
       i1: { id: "i1", url: "https://example.com/products/strawberry-footie", title: "Zippered Footie", printName: "Strawberry Patch", type: "Footie", brand: "Kyte Baby", size: "12–18M", price: "$38", priority: "most", image: img("#F3D3CF", "#C9787A"), sizeFlexible: true, createdAt: now },
       i2: { id: "i2", url: "https://example.com/products/woodland-set", title: "Bamboo Two-Piece Set", printName: "Woodland Friends", type: "Two-piece PJs", brand: "Little Sleepies", size: "12–18M", price: "$36", priority: "nice", image: img("#E5E6D2", "#8E9A6F"), printFlexible: true, createdAt: now },
       i9: { id: "i9", title: "Two-Piece Bamboo PJ Set", printName: "Bunny Meadow", type: "Two-piece PJs", brand: "Little Sleepies", size: "12–18M", price: "$42", priority: "nice", image: img("#E3E6D3", "#FFFFFF"), url: "", createdAt: now },
+      i10: { id: "i10", url: "https://example.com/products/ribbed-zip-jammies-toadstool-grove", title: "Ribbed Zip Jammies", printName: "Toadstool Grove", type: "Zippy", brand: "The Sleepy Sloth", size: "12–18M", sizeFlexible: true, price: "$36", priority: "nice", stock: "out", stockAt: now, image: img("#EADFD3", "#B08F73"), createdAt: now },
       i4: { id: "i4", category: "toy", title: "Silicone Stacking Cups", brand: "Mushie", type: "Stacker", ageRange: "6m+", price: "$16", priority: "most", image: img("#E8EBDA", "#A7B8A0"), url: "", createdAt: now },
       i5: { id: "i5", category: "toy", title: "Board Book Set", brand: "Usborne", type: "Book", ageRange: "0–2y", price: "$24", priority: "nice", image: img("#F6DCD8", "#C48E93"), url: "", createdAt: now },
       i6: { id: "i6", category: "other", title: "Knit Stroller Blanket", brand: "Quincy Mae", type: "Blanket", price: "$58", priority: "nice", image: img("#EBD6D3", "#D4AEAA"), url: "", createdAt: now },
@@ -327,7 +329,7 @@ export function createDemoStore() {
   let user = null;
   let notify = () => {};
   // Owner-only private data (gifter names, thank-yous), like the server's private document.
-  const priv = { drafts: { d1: { id: "d1", category: "toy", title: "Wooden Play Kitchen", brand: "Hape", price: "$129", priority: "nice", image: img("#EADFD3", "#A7B8A0"), createdAt: now } }, givers: { i3: { from: "Aunt Jen", at: now } }, thanks: { th1: { id: "th1", itemId: "", title: "Wooden Rattle", from: "Grandma Sue", at: now - 86400000 * 3, done: false } } };
+  const priv = { alerts: { i10: [{ e: "grandma@example.com", at: now }] }, drafts: { d1: { id: "d1", category: "toy", title: "Wooden Play Kitchen", brand: "Hape", price: "$129", priority: "nice", image: img("#EADFD3", "#A7B8A0"), createdAt: now } }, givers: { i3: { from: "Aunt Jen", at: now } }, thanks: { th1: { id: "th1", itemId: "", title: "Wooden Rattle", from: "Grandma Sue", at: now - 86400000 * 3, done: false } } };
   const addThank = (title, from) => { const tid = `th${Math.random().toString(36).slice(2, 8)}`; priv.thanks[tid] = { id: tid, itemId: "", title, from, at: Date.now(), done: false }; };
   for (const b of Object.values(data.brands)) b.sizeAt = now;
   const firstBrand = Object.values(data.brands)[0]; if (firstBrand) firstBrand.sizeAt = now - 86400000 * 75; // shows the reminder
@@ -400,6 +402,14 @@ export function createDemoStore() {
       return { choices: shades.map(([bg, fg], k) => ({ image: img(bg, fg), url: `https://example.com/products/${encodeURIComponent(name.toLowerCase().replace(/\s+/g, "-"))}-${k + 1}`, title: `${name} ${["Zippy", "Romper", "Two-Piece"][k]}`, source: k ? "web" : "store" })), searched: ["store"], webConfigured: true };
     },
     setPhoto: m((kind, id, image, url) => { const r = data[kind]?.[id]; if (!r) throw new FriendlyError("That isn't in the list anymore."); r.image = image; if (url && !r.url) r.url = url; }),
+    subscribe: m((itemId, email) => {
+      const it = data.items[itemId];
+      if (!it) throw new FriendlyError("That item isn't on the list anymore.");
+      if (it.stock !== "out") throw new FriendlyError("Good news: it looks available right now!");
+      priv.alerts = priv.alerts || {};
+      const l = priv.alerts[itemId] || [];
+      if (!l.some((x) => x.e === email.toLowerCase())) priv.alerts[itemId] = [...l, { e: email.toLowerCase(), at: Date.now() }];
+    }),
     setObsessions: m((items) => { if (JSON.stringify(data.obsessions?.items || []) !== JSON.stringify(items)) data.obsessions = { items, updatedAt: Date.now() }; }),
     bulkCloset: m((kind, ids, op) => {
       const removed = {};
