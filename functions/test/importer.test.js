@@ -42,11 +42,51 @@ test("retired product page falls back to the Wayback Machine", async () => {
 });
 
 test("shoe sizes: sold out only if her size and bigger are gone", () => {
-  const { shopifyInStock, shoeRank } = require("../importer");
+  const { shopifyInStock, sizeWant } = require("../importer");
   const p = (avail) => ({ options: ["Size"], variants: Object.entries(avail).map(([option1, available]) => ({ option1, available })) });
-  const min = shoeRank("4C");
-  assert.deepEqual(min, { shoe: true, n: 4 });
+  const min = sizeWant("4C", true);
+  assert.deepEqual(min, { shoe: true, n: 4, orBigger: true });
   assert.equal(shopifyInStock(p({ "3": true, "4": false, "5": false }), min), false);
   assert.equal(shopifyInStock(p({ "3": false, "4": false, "5 Toddler": true }), min), true);
   assert.equal(shopifyInStock(p({ "4C": false, "4.5C": true }), min), true);
+});
+
+
+// The Sleepy Sloth "Ribbed Zip Jammies - Toadstool Grove" as listed Oct 2026:
+// only TEENIE (smaller than newborn) in stock; she asked for 12–18M or bigger.
+const sloth = { options: [{ name: "Size", values: ["TEENIE", "NEWBORN", "0/3", "3/6", "6/12", "12/18", "18/24"] }], available: true,
+  variants: ["TEENIE", "NEWBORN", "0/3", "3/6", "6/12", "12/18", "18/24"].map((s, i) => ({ option1: s, available: i === 0 })) };
+const withStock = (avail) => ({ ...sloth, variants: sloth.variants.map((v) => ({ ...v, available: avail.includes(v.option1) })) });
+
+test("stock: store labels line up with the app's sizes", () => {
+  const { sizeRange } = require("../importer");
+  const same = [["6-12M", "6/12", "6 to 12 mo", "6M-12M", "6–12 Months", "6-12", "6-12 Months (17-22 lbs)"], ["2T", "2Y", "2 years", "2-3", "2"], ["Newborn", "NB", "NEWBORN", "Newborn (5-8 lbs)"]];
+  for (const group of same) for (const x of group) assert.deepEqual(sizeRange(x), sizeRange(group[0]), x);
+  assert.ok(sizeRange("TEENIE").lo < sizeRange("Newborn").lo);
+  assert.equal(sizeRange("One Size"), null);
+});
+
+test("stock: only-TEENIE is OUT for a 12–18M-or-bigger wish (the reported bug)", () => {
+  const { shopifyInStock, sizeWant } = require("../importer");
+  assert.equal(shopifyInStock(sloth, sizeWant("12–18M", true)), false);
+  assert.equal(shopifyInStock(withStock(["18/24"]), sizeWant("12–18M", true)), true, "bigger size counts when bigger is OK");
+  assert.equal(shopifyInStock(withStock(["12/18"]), sizeWant("12–18M", true)), true);
+});
+
+test("stock: without 'bigger size OK' only her size counts", () => {
+  const { shopifyInStock, sizeWant } = require("../importer");
+  assert.equal(shopifyInStock(withStock(["18/24"]), sizeWant("12–18M", false)), false);
+  assert.equal(shopifyInStock(withStock(["12/18"]), sizeWant("12–18M", false)), true);
+  assert.equal(shopifyInStock(withStock(["3/6", "6/12"]), sizeWant("6–12M", false)), true);
+  assert.equal(shopifyInStock(withStock(["3/6"]), sizeWant("6–12M", false)), false);
+});
+
+test("stock: unrecognized sizes don't count once a product has normal sizes; all-unrecognized → product availability", () => {
+  const { shopifyInStock, sizeWant } = require("../importer");
+  const odd = { options: ["Size"], available: true, variants: [{ option1: "Bundle", available: true }, { option1: "12-18M", available: false }] };
+  assert.equal(shopifyInStock(odd, sizeWant("12–18M", true)), false);
+  const oneSize = { options: ["Size"], available: true, variants: [{ option1: "One Size", available: true }] };
+  assert.equal(shopifyInStock(oneSize, sizeWant("12–18M", true)), null, "can't tell → unknown, not 'in stock'");
+  const gone = { options: ["Size"], available: false, variants: [{ option1: "One Size", available: false }] };
+  assert.equal(shopifyInStock(gone, sizeWant("12–18M", true)), false);
 });

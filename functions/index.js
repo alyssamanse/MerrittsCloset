@@ -173,10 +173,10 @@ functions.http("api", async (req, res) => {
         found = images.length;
         reduceAction = "setImages"; reducePayload = { images };
       } else {
-        // Sold out only if nothing is left in the size gifters should buy (the item's size,
-        // else her current size for that brand) or bigger.
+        // Sold out unless a size she can wear is available: the item's own size (or bigger, if
+        // "bigger size OK"), else her current size for that brand or bigger.
         const brandOf = (name) => Object.values(doc.brands || {}).find((b) => brandKey(b.name) === brandKey(name));
-        const results = await Promise.all(recs.map(async (r) => ({ id: r.id, stock: await checkStock(r.url, r.size || sizeForStyle(brandOf(r.brand), r.type, r.title)).catch(() => "unknown") })));
+        const results = await Promise.all(recs.map(async (r) => ({ id: r.id, stock: await checkStock(r.url, r.size || sizeForStyle(brandOf(r.brand), r.type, r.title), { orBigger: !r.size || !!r.sizeFlexible }).catch(() => "unknown") })));
         found = results.filter((r) => r.stock === "out").length;
         reduceAction = "setStock"; reducePayload = { results, at: Date.now() };
       }

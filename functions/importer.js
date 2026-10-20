@@ -195,58 +195,101 @@ async function fromWayback(pageUrl) {
 
 // Size → age in months, for comparing sizes across brands ("6-12M" → 6, "2T" → 24).
 // null means "can't tell" (One Size, S/M/L…), which counts as fitting.
-function sizeRank(raw) {
-  const s = String(raw || "").toLowerCase().replace(/[–—]/g, "-");
-  if (/preemie|premature/.test(s)) return -2;
-  if (/newborn|\bnb\b|0-1m|up to 7/.test(s)) return -1;
-  let m = /(\d+(?:\.\d+)?)\s*(?:-\s*\d+(?:\.\d+)?\s*)?(?:m|mo|mos|month|months)\b/.exec(s);
-  if (m) return Number(m[1]);
-  m = /(\d+)\s*(?:-\s*\d+\s*)?(?:t|y|yr|yrs|year|years)\b/.exec(s);
-  if (m) return Number(m[1]) * 12;
+// ── sizes ───────────────────────────────────────────────────────────
+// Every size becomes a range in months, so store labels line up with the app's sizes
+// (3–6M … 18–24M, 2T–4T) however the store writes them:
+//   "TEENIE" / "Preemie"           → smaller than newborn
+//   "Newborn", "NB", "0-1M"        → newborn
+//   "6-12M", "6–12 Months", "6/12", "6M-12M", "6 to 12 mo", "6-12" → 6 to 12 months
+//   "12M", "12 mo"                 → 12 to 15 months
+//   "2T", "2Y", "2 years", "2-3", "2-3Y", "2" (bare kids' size) → 2 years and up
+// Anything else (One Size, S/M/L) is unrecognized and returns null.
+const MONTH_UNIT = "(?:m|mo|mos|month|months)";
+const YEAR_UNIT = "(?:t|y|yr|yrs|year|years|toddler)";
+function sizeRange(raw) {
+  let s = String(raw || "").toLowerCase().replace(/[–—]/g, "-").replace(/\s+to\s+/g, "-").replace(/\//g, "-").trim();
+  if (/preemie|premature|teenie|teeny|tiny baby|micro|early baby/.test(s)) return { lo: -2, hi: -1 };
+  if (/newborn|new born|\bnb\b|^0-1\s*m|up to \d+\s*lbs?/.test(s)) return { lo: -1, hi: 0 };
+  s = s.replace(/\([^)]*\)/g, " ").replace(/\b(size|sz|baby|infant|kids?)\b/g, " ").replace(/\s+/g, " ").trim();
+  let m = new RegExp(`(\\d+)\\s*${YEAR_UNIT}?\\s*-\\s*(\\d+)\\s*${YEAR_UNIT}\\b`).exec(s) || new RegExp(`(\\d+)\\s*${YEAR_UNIT}\\b`).exec(s);
+  if (m) { const a = +m[1], b = m[2] ? +m[2] : a + 1; return { lo: a * 12, hi: b * 12 }; }
+  m = new RegExp(`(\\d+)\\s*${MONTH_UNIT}?\\s*-\\s*(\\d+)\\s*${MONTH_UNIT}\\b`).exec(s);
+  if (m) return { lo: +m[1], hi: +m[2] };
+  m = new RegExp(`(\\d+)\\s*${MONTH_UNIT}\\b`).exec(s);
+  if (m) return { lo: +m[1], hi: +m[1] + 3 };
+  m = /^(\d+)\s*-\s*(\d+)$/.exec(s);                       // bare range: months, unless it's a kids' 2-3, 3-4…
+  if (m) { const a = +m[1], b = +m[2]; if (b <= a) return null; return a >= 2 && b - a === 1 ? { lo: a * 12, hi: b * 12 } : b <= 36 ? { lo: a, hi: b } : null; }
+  m = /^(\d+)$/.exec(s);                                       // bare kids' size "2", "3"…
+  if (m && +m[1] >= 2 && +m[1] <= 16) return { lo: +m[1] * 12, hi: +m[1] * 12 + 12 };
   return null;
 }
+// Lower bound in months (kept for older callers): "6-12M" → 6.
+const sizeRank = (raw) => sizeRange(raw)?.lo ?? null;
+
 // Kids' shoe sizes ("4C", "4", "4 Toddler", "5.5 Infant") sit on their own scale, never mixed with months.
-// A rank is { shoe: true, n } for shoes, or a number of months for clothes.
 function shoeRank(raw) {
   const s = String(raw || "").toLowerCase().trim();
   const m = /^(\d{1,2}(?:\.5)?)\s*(?:c|k|t|toddler|toddlers|infant|baby|little kid|big kid)?$/.exec(s) || /^(?:us\s*)?(\d{1,2}(?:\.5)?)\s*c\b/.exec(s);
   return m ? { shoe: true, n: Number(m[1]) } : null;
 }
-// Available in this size or bigger? Unknown sizes count as fitting.
-const fits = (size, minRank) => {
-  if (minRank == null) return true;
-  if (typeof minRank === "object") { const r = shoeRank(size); return r == null || r.n >= minRank.n; }
-  const r = sizeRank(size);
-  return r == null || r >= minRank;
-};
 
-function shopifyInStock(p, minRank) {
+// What she can wear, from the wishlist: her size, plus anything bigger when "bigger size OK"
+// (or when the size came from the brand's "this size or bigger").
+function sizeWant(minSize, orBigger = true) {
+  const raw = String(minSize || "").trim();
+  if (!raw) return null;
+  if (/c$/i.test(raw)) { const r = shoeRank(raw); return r && { shoe: true, n: r.n, orBigger }; }
+  const r = sizeRange(raw);
+  return r && { ...r, orBigger };
+}
+const parseVariant = (label, want) => (want?.shoe ? shoeRank(label) : sizeRange(label));
+// Does one store size work for her?
+function fitsWant(label, want) {
+  const r = parseVariant(label, want);
+  if (!r) return null;                                          // unrecognized label
+  if (want.shoe) return want.orBigger ? r.n >= want.n : r.n === want.n;
+  if (want.orBigger) return r.lo >= want.lo;
+  return r.lo < want.hi && r.hi > want.lo && r.lo >= want.lo - 1; // overlaps her size (6/9 or 9/12 for 6–12M)
+}
+// In stock for her? true / false / null (couldn't tell). Unrecognized labels never count as a match
+// when the product has recognizable sizes, so "TEENIE" can't make a 12–18M wish look available.
+function sizesInStock(entries, want) {
+  const known = entries.map((e) => ({ ...e, fit: fitsWant(e.size, want) }));
+  if (!known.some((e) => e.fit !== null)) return null;
+  return known.some((e) => e.available && e.fit === true);
+}
+
+function shopifyInStock(p, want) {
   const opts = (p.options || []).map((o) => (typeof o === "string" ? o : o.name || ""));
   const sizeIdx = opts.findIndex((n) => /size|age/i.test(n));
   const variants = Array.isArray(p.variants) ? p.variants : [];
-  if (sizeIdx < 0 || !variants.length || minRank == null) return typeof p.available === "boolean" ? p.available : null;
-  return variants.some((v) => v.available && fits(v[`option${sizeIdx + 1}`] ?? v.options?.[sizeIdx], minRank));
+  if (sizeIdx < 0 || !variants.length || !want) return typeof p.available === "boolean" ? p.available : null;
+  const r = sizesInStock(variants.map((v) => ({ size: v[`option${sizeIdx + 1}`] ?? v.options?.[sizeIdx], available: !!v.available })), want);
+  return r === null ? (typeof p.available === "boolean" && !p.available ? false : null) : r;
 }
 
-function ldInStock(html, minRank) {
+function ldInStock(html, want) {
   for (const m of html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
     let product;
     try { product = findProduct(JSON.parse(m[1].trim())); } catch { continue; }
     if (!product) continue;
     const variants = Array.isArray(product.hasVariant) ? product.hasVariant : [product];
     const offers = variants.flatMap((v) => [].concat(v.offers || []).map((o) => ({ o, size: v.size || v.name || o.name || "" })));
-    if (!offers.length) return null;
     const known = offers.filter(({ o }) => availability(o) !== null);
     if (!known.length) return null;
-    return known.some(({ o, size }) => availability(o) && fits(size, minRank));
+    if (!want) return known.some(({ o }) => availability(o));
+    const r = sizesInStock(known.map(({ o, size }) => ({ size, available: availability(o) })), want);
+    // Sizes unreadable: only trust a clear "nothing is for sale".
+    return r === null ? (known.every(({ o }) => !availability(o)) ? false : null) : r;
   }
   return null;
 }
 
-// Is this product still for sale in her size or bigger?
-// "in", "out" (every size from minSize up is sold out, or the page is gone) or "unknown".
-async function checkStock(rawUrl, minSize = "") {
-  const minRank = /c$/i.test(String(minSize || "").trim()) ? shoeRank(minSize) : sizeRank(minSize);
+// Is this product for sale in a size she can wear?
+// "in", "out" (none of her sizes are available, or the page is gone) or "unknown".
+// orBigger: her size or any bigger one counts; otherwise only her size.
+async function checkStock(rawUrl, minSize = "", { orBigger = true } = {}) {
+  const want = sizeWant(minSize, orBigger);
   let u;
   try { u = checkUrl(rawUrl); } catch { return "unknown"; }
   const shop = /^(.*\/products\/[^/?#]+)/.exec(u.origin + u.pathname)?.[1];
@@ -254,14 +297,14 @@ async function checkStock(rawUrl, minSize = "") {
     const r = await get(`${shop}.js`, "application/json", { keepStatus: true });
     if (r?.status === 404) return "out";
     if (r?.text) {
-      try { const ok = shopifyInStock(JSON.parse(r.text), minRank); if (ok === true) return "in"; if (ok === false) return "out"; } catch { /* not Shopify */ }
+      try { const ok = shopifyInStock(JSON.parse(r.text), want); if (ok === true) return "in"; if (ok === false) return "out"; } catch { /* not Shopify */ }
     }
   }
   const page = await get(u.href, "text/html,application/xhtml+xml", { keepStatus: true });
   if (page?.status === 404 || page?.status === 410) return "out";
   if (!page?.text) return "unknown";
-  const a = ldInStock(page.text, minRank);
+  const a = ldInStock(page.text, want);
   return a === true ? "in" : a === false ? "out" : "unknown";
 }
 
-module.exports = { get, fromWayback, sizeRank, shoeRank, shopifyInStock, checkStock, availability, importLink, parseShopify, parseHtml, printFromTitle, checkUrl, httpError };
+module.exports = { get, fromWayback, sizeRange, sizeRank, sizeWant, fitsWant, shoeRank, shopifyInStock, checkStock, availability, importLink, parseShopify, parseHtml, printFromTitle, checkUrl, httpError };
