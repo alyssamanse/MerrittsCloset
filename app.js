@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1020-1520";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1020-1520";
-const BUILD = "1020-1520"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1020-1553";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1020-1553";
+const BUILD = "1020-1553"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = CONFIG.tabs || ["wishlist", "closet", "sizes"];
@@ -399,7 +399,8 @@ async function addStarters() {
 // ── first-time guide (sites with CONFIG.guide) ───────────────────────
 // Five short screens for the list's owner, shown once after the first sign-in on a device,
 // and any time from "How This Works".
-const GUIDE_KEY = () => `closet:guideSeen:${CONFIG.site || "merritt"}`;
+// Remembered per owner (and per device), so each owner sees it on their own first sign-in.
+const GUIDE_KEY = () => `closet:guideSeen:${CONFIG.site || "merritt"}:${(S.user?.email || "").toLowerCase()}`;
 function guideSteps() {
   const n = esc(CONFIG.babyName);
   return [
