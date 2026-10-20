@@ -11,15 +11,15 @@ say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 gcloud config set project "$PROJECT" >/dev/null 2>&1
 
 say "1/4 Getting the code…"
-rm -rf "$HOME/MerrittsCloset-setup"
-git clone -q --depth 1 https://github.com/alyssamanse/MerrittsCloset.git "$HOME/MerrittsCloset-setup" || { echo "Couldn't download the code."; exit 1; }
-cd "$HOME/MerrittsCloset-setup"
+WORK=$(mktemp -d)
+git clone -q --depth 1 https://github.com/alyssamanse/MerrittsCloset.git "$WORK/code" || { echo "Couldn't download the code."; exit 1; }
+cd "$WORK/code"
 
 say "2/4 Creating Luca's server (takes 3–5 minutes, keep this tab open)…"
 gcloud run deploy luca-api --source functions --function api --base-image nodejs22 \
   --region "$REGION" --allow-unauthenticated --max-instances 1 --timeout 300 --quiet \
   --service-account 767635696368-compute@developer.gserviceaccount.com \
-  --set-env-vars "^@^WISHLIST_ID=w_8nq00X41XkIsTMvl5GJT@OWNER_EMAIL=alyssamanse@gmail.com@ALLOWED_ORIGINS=https://alyssamanse.github.io@BABY_NAME=Luca@SITE_TITLE=Luca's Wishlist@SITE_URL=https://alyssamanse.github.io/MerrittsCloset/luca/@ALERT_FROM=Luca's Wishlist <alerts@alerts.merrittjean.com>@ALERT_ACCENT=#2E5E7E@CRON_AUDIENCE=$URL/cron/daily" \
+  --set-env-vars "^;^WISHLIST_ID=w_8nq00X41XkIsTMvl5GJT;OWNER_EMAIL=alyssamanse@gmail.com;ALLOWED_ORIGINS=https://alyssamanse.github.io;BABY_NAME=Luca;SITE_TITLE=Luca's Wishlist;SITE_URL=https://alyssamanse.github.io/MerrittsCloset/luca/;ALERT_FROM=Luca's Wishlist <alerts@alerts.merrittjean.com>;ALERT_ACCENT=#2E5E7E;CRON_AUDIENCE=$URL/cron/daily" \
   --set-secrets RESEND_API_KEY=resend-api-key:latest || { echo "The server step failed. Copy the lines above and send them to Claude."; exit 1; }
 
 say "3/4 Letting GitHub keep it up to date…"
