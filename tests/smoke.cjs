@@ -226,10 +226,21 @@ const openSheet = async (p, sel, expectTitle) => {
     must(await l.locator("[data-to=family]").count() === 0, "family link shown");
     must((await l.locator("h1.logo").innerText()).toLowerCase().includes("luca"), "logo isn't Luca's");
     must(await l.locator(".chip.top").count() === 0, "closet badges on a wishlist-only site");
+    must((await l.locator("footer").innerText()).includes("Sign in to edit"), "no sign-in link for the owner");
   });
   await step("Luca's page: owner adds the example gifts in one tap", async () => {
     const lo = await page(browser, "luca/?demo&admin");
     const s = lo.locator("[data-act=signin]"); if (await s.count()) { await s.first().click(); await lo.waitForTimeout(400); }
+    // First sign-in: the tutorial opens by itself; walk through it.
+    await lo.waitForSelector(".guide", { timeout: 5000 });
+    for (let k = 0; k < 5; k++) await lo.click('.guide [data-m="next"]');
+    must(await lo.locator(".guide").count() === 0, "guide didn't close");
+    must(await lo.locator(".owner-bar [data-act=add]").count() === 1, "no big Add button");
+    // simple form: extra fields folded away until "More details"
+    await lo.click(".owner-bar [data-act=add]"); await lo.waitForTimeout(250);
+    must(!(await lo.locator("#f-image").isVisible()), "image address shown in the simple form");
+    await lo.click(".more-details"); must(await lo.locator("#f-image").isVisible(), "More details didn't open");
+    await lo.click('.sheet-bg [data-act="cancel"]'); await lo.waitForTimeout(200);
     must(await lo.locator("[data-act=add-starters]").count() === 1, "no example-gifts button on an empty list");
     await lo.click("[data-act=add-starters]");
     await lo.waitForFunction(() => document.querySelectorAll("article.card").length >= 10, null, { timeout: 30000 }).catch(() => {});

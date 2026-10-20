@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1020-1509";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1020-1509";
-const BUILD = "1020-1509"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1020-1515";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1020-1515";
+const BUILD = "1020-1515"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = CONFIG.tabs || ["wishlist", "closet", "sizes"];
@@ -174,6 +174,7 @@ function render() {
     <footer>
       <button class="to-top" data-act="to-top" aria-label="Back to top"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg><span>Back to Top</span></button>
       ${tab !== "family" && (CONFIG.family || []).length ? `<div class="family-link"><button class="link" data-act="go-tab" data-to="family">Shopping for the rest of the family?</button></div>` : ""}
+      ${CONFIG.guide && !S.user ? `<div class="family-link"><button class="link" data-act="signin" ${dis("signin")}>${busy.has("signin") ? "Opening Google…" : `Managing ${esc(CONFIG.babyName)}'s list? Sign in to edit`}</button></div>` : ""}
       <button class="link quiet" data-act="share">Share</button><span class="muted"> · </span>
       <button class="link quiet" data-act="refresh" ${dis("refresh")}>Refresh</button>
       ${S.user ? `<span class="muted"> · ${owner() ? "Editing on" : "Signed in"} · </span><button class="link" data-act="signout">Sign out</button>` : ""}
@@ -281,6 +282,11 @@ function wishlistView() {
     wlSection("claimed", "Already Claimed", claimed, claimed.map((i) => itemCard(i)).join(""), { open: false }),
   ].join("");
   return `
+    ${owner() && CONFIG.guide ? `<div class="owner-bar">
+        <button class="btn" data-act="add">+ Add a Gift</button>
+        <button class="btn ghost" data-act="share">Share ${esc(CONFIG.babyName)}'s List</button>
+        <button class="link" data-act="guide">How This Works</button>
+      </div>` : ""}
     ${owner() ? stockBanner(all, soldOut) : `<div class="note">Tap <b>I'll get this</b> so nobody doubles up. It's anonymous, and you can undo it from this same phone or computer.</div>`}
     <div class="section-title"><h2>Wishlist</h2><span class="muted">${openItems.length} still open</span></div>
     ${filterChips("wishlist", [["all", "All", all.length], ["clothes", "Clothes", count("clothes")], ["toys", "Toys", count("toy")], ["other", "Other", count("other")]])}
@@ -388,6 +394,50 @@ async function addStarters() {
   } catch (e) {
     toast(added ? `Added ${added}. ${e?.message || "The rest didn't save."}` : e?.message || "Couldn't add them right now.");
   } finally { busy.delete("starters"); starterProgress = ""; render(); }
+}
+
+// ── first-time guide (sites with CONFIG.guide) ───────────────────────
+// Five short screens for the list's owner, shown once after the first sign-in on a device,
+// and any time from "How This Works".
+const GUIDE_KEY = () => `closet:guideSeen:${CONFIG.site || "merritt"}`;
+function guideSteps() {
+  const n = esc(CONFIG.babyName);
+  return [
+    { icon: "👋", title: `Welcome to ${n}'s Wishlist`, text: `This is your page. Family and friends open your link, see the list, and tap <b>I'll get this</b> so nobody buys the same thing twice. Only you can change the list.` },
+    { icon: "🎁", title: "Add a gift", text: `Tap <b>+ Add a Gift</b>. Paste a link from any store's website and tap <b>Fill in</b>: the photo, name and price fill in for you. Then tap <b>Save</b>. No link? Just type a name.` },
+    { icon: "💌", title: "Share the list", text: `Tap <b>Share ${n}'s List</b> to copy the link (paste it into a text or email) or to show a QR code people can scan with their phone camera.` },
+    { icon: "✅", title: "When someone's getting it", text: `A gift someone picked shows <b>Claimed</b>, with their name if they left one. When it arrives, tap <b>Received</b>: it leaves the list and their name goes on your <b>Thank-You Notes</b> list.` },
+    { icon: "🙂", title: "You can't break anything", text: `Tap <b>Edit</b> on any gift to change or delete it. Still deciding about something? Open <b>More details</b> and tick <b>Hide from guests</b>. You can reopen this guide anytime from <b>How This Works</b>.` },
+  ];
+}
+function guideSheet() {
+  const steps = guideSteps();
+  let i = 0;
+  try { localStorage.setItem(GUIDE_KEY(), "1"); } catch {}
+  openSheet(`<div class="guide"><div class="guide-body"></div>
+      <div class="guide-dots" aria-hidden="true">${steps.map(() => "<i></i>").join("")}</div>
+      <div class="sheet-actions"><button class="link" data-m="skip">Skip</button><span class="spacer"></span>
+        <button class="btn ghost" data-m="back">Back</button><button class="btn" data-m="next">Next</button></div></div>`,
+    (el) => {
+      const draw = () => {
+        const st = steps[i];
+        el.querySelector(".guide-body").innerHTML = `<div class="guide-icon" aria-hidden="true">${st.icon}</div><h2>${st.title}</h2><p>${st.text}</p><p class="muted guide-count">${i + 1} of ${steps.length}</p>`;
+        el.querySelectorAll(".guide-dots i").forEach((d, k) => d.classList.toggle("on", k === i));
+        el.querySelector('[data-m="back"]').hidden = i === 0;
+        el.querySelector('[data-m="next"]').textContent = i === steps.length - 1 ? "Got It" : "Next";
+        el.querySelector('[data-m="skip"]').hidden = i === steps.length - 1;
+      };
+      draw();
+      el.querySelector('[data-m="next"]').addEventListener("click", () => { if (i < steps.length - 1) { i++; draw(); } else closeSheet(); });
+      el.querySelector('[data-m="back"]').addEventListener("click", () => { if (i > 0) { i--; draw(); } });
+      el.querySelector('[data-m="skip"]').addEventListener("click", () => closeSheet());
+    });
+}
+function maybeGuide() {
+  if (!CONFIG.guide || !owner() || document.querySelector(".sheet-bg")) return;
+  let seen = false;
+  try { seen = localStorage.getItem(GUIDE_KEY()) === "1"; } catch {}
+  if (!seen) guideSheet();
 }
 
 function stockBanner(all, soldOut) {
@@ -1862,7 +1912,7 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
     .map((t) => `<option ${current === t ? "selected" : ""}>${esc(t)}</option>`).join("");
   const title = { wc: "Edit Wish", wt: "Edit Wish", wo: "Edit Wish", cc: "Edit Print", ct: "Edit Toy", co: "Edit Item" };
   const html = `
-    <h2>${isEdit ? title[dest[0] + cat[0]] : "Add Something"}</h2>
+    <h2>${isEdit ? (CONFIG.guide ? "Edit Gift" : title[dest[0] + cat[0]]) : CONFIG.guide ? "Add a Gift" : "Add Something"}</h2>
     ${isEdit ? "" : `
       <div class="seg"${HAS_CLOSET ? "" : " hidden"}><button type="button" data-dest="wishlist" aria-pressed="${dest === "wishlist"}">Wishlist</button><button type="button" data-dest="closet" aria-pressed="${dest === "closet"}">She has it</button></div>
       <div class="seg"><button type="button" data-cat="clothes" aria-pressed="${cat === "clothes"}">Clothes</button><button type="button" data-cat="toy" aria-pressed="${cat === "toy"}">Toy</button><button type="button" data-cat="other" aria-pressed="${cat === "other"}">Other</button></div>`}
@@ -1924,8 +1974,10 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
       <label class="f" for="f-notes">Note for gifters (optional)</label>
       <input class="in" id="f-notes" name="notes" maxlength="200" value="${esc(e.notes || "")}" placeholder="Sells out fast, check back" />
     </div>
-    <label class="f" for="f-image">Image address</label>
-    <input class="in" id="f-image" name="image" maxlength="600" value="${esc(e.image && !e.image.startsWith("data:") ? e.image : "")}" placeholder="https://…" />
+    <div class="img-field">
+      <label class="f" for="f-image">Image address</label>
+      <input class="in" id="f-image" name="image" maxlength="600" value="${esc(e.image && !e.image.startsWith("data:") ? e.image : "")}" placeholder="https://…" />
+    </div>
 
     <datalist id="dl-brands">${brandOptions()}</datalist>
     <datalist id="dl-sizes">${sizeOptions()}</datalist>
@@ -1951,6 +2003,21 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
         el.querySelectorAll(`[data-${attr}]`).forEach((x) => x.setAttribute("aria-pressed", x === b));
         apply();
       }));
+    }
+    // Simple mode (guide sites): the essentials up front, everything else under "More details".
+    if (CONFIG.guide && dest === "wishlist") {
+      const adv = [
+        f("type")?.closest("[data-show]"), f("toyType")?.closest("[data-show]"), f("otherType")?.closest("[data-show]"), f("printName")?.closest("[data-show]"),
+        f("ageRange")?.closest("div"), f("sizeFlexible")?.closest("[data-show]"), f("hidden")?.closest("[data-show]"),
+        el.querySelector(".img-field"), el.querySelector(".pf-inline"),
+      ].filter(Boolean);
+      adv.forEach((n) => n.classList.add("adv"));
+      el.classList.add("simple-form");
+      const more = document.createElement("button");
+      more.type = "button"; more.className = "link more-details"; more.textContent = "More details (optional)";
+      more.addEventListener("click", () => { const open = el.classList.toggle("show-adv"); more.textContent = open ? "Fewer details" : "More details (optional)"; });
+      el.querySelector(".sheet-err").before(more);
+      if (hidden) more.click(); // editing a hidden gift: show the "hide" box it's using
     }
     wireTypeControls(el, "Up to 8 styles per print");
     f("image").addEventListener("change", () => (el.querySelector("#pv").src = safeUrl(f("image").value) || PLACEHOLDER));
@@ -2237,6 +2304,7 @@ $app.addEventListener("click", (ev) => {
   switch (t.dataset.act) {
     case "claim": return claimSheet(id);
     case "notify": return notifySheet(id);
+    case "guide": return guideSheet();
     case "add-starters": return addStarters();
     case "share-item": return shareItem(id);
     case "undo-delete": return act("undo", () => store.undoBulkDelete(), "Restored");
@@ -2350,7 +2418,7 @@ checkForNewVersion();
   }
   let linked = false;
   store.start((next) => {
-    S = next; render(); maybeAutoStock();
+    S = next; render(); maybeAutoStock(); maybeGuide();
     if (!linked && S.data) { linked = true; openDeepLink(); }
   });
 })();

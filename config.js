@@ -71,6 +71,7 @@ const SITES = {
     logoSub: "Wishlist",
     tagline: "Gift ideas for Luca, and a way to make sure nobody doubles up",
     tabs: ["wishlist"],                            // wishlist only: no closet, sizes or family pages
+    guide: true,                                   // first-time tutorial, big Add/Share buttons, simpler form, sign-in link
     family: [],
     pronoun: { her: "his", she: "he" },
     monogram: "L",
