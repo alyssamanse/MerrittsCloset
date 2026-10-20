@@ -295,7 +295,8 @@ async function checkStock(rawUrl, minSize = "", { orBigger = true } = {}) {
   const shop = /^(.*\/products\/[^/?#]+)/.exec(u.origin + u.pathname)?.[1];
   if (shop) {
     const r = await get(`${shop}.js`, "application/json", { keepStatus: true });
-    if (r?.status === 404) return "out";
+    // A missing .js only means "not a Shopify store" (Lovevery and others use /products/ links too).
+    // Gone-for-good is decided by the product page itself below.
     if (r?.text) {
       try { const ok = shopifyInStock(JSON.parse(r.text), want); if (ok === true) return "in"; if (ok === false) return "out"; } catch { /* not Shopify */ }
     }

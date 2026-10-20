@@ -90,3 +90,21 @@ test("stock: unrecognized sizes don't count once a product has normal sizes; all
   const gone = { options: ["Size"], available: false, variants: [{ option1: "One Size", available: false }] };
   assert.equal(shopifyInStock(gone, sizeWant("12–18M", true)), false);
 });
+
+test("stock: a non-Shopify store with /products/ links isn't marked sold out (Lovevery)", async () => {
+  const { checkStock } = require("../importer");
+  const real = global.fetch;
+  const page = (status, body = "") => ({ ok: status < 400, status, url: "", headers: { get: () => "text/html" }, arrayBuffer: async () => Buffer.from(body) });
+  try {
+    // .js → 404 (not Shopify), page → 200 with no stock data: can't tell, so "unknown", never "out"
+    global.fetch = async (u) => ({ ...page(String(u).endsWith(".js") ? 404 : 200, "<html><title>Play Every Way Table</title></html>"), url: String(u) });
+    assert.equal(await checkStock("https://lovevery.com/products/the-play-every-way-table"), "unknown");
+    // a pre-order page that says so in its product data counts as available
+    const ld = `<script type="application/ld+json">{"@type":"Product","name":"Table","offers":{"availability":"https://schema.org/PreOrder"}}</script>`;
+    global.fetch = async (u) => ({ ...page(String(u).endsWith(".js") ? 404 : 200, ld), url: String(u) });
+    assert.equal(await checkStock("https://lovevery.com/products/the-play-every-way-table"), "in");
+    // the product page itself is gone → out
+    global.fetch = async (u) => ({ ...page(404), url: String(u) });
+    assert.equal(await checkStock("https://lovevery.com/products/retired-thing"), "out");
+  } finally { global.fetch = real; }
+});
