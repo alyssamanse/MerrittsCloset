@@ -582,7 +582,9 @@
   .gifted-row > .link, .gifted-mine { flex: none; }
   .gifted-mine { display: flex; flex-direction: column; align-items: flex-end; }
   .gifted-mine .link { padding: 2px 0; }
-  .gifted-owner { text-align: center; margin: 18px 0 0; }
+  .gifted-owner { text-align: center; margin: 40px 0 8px; font-size: 13px; color: var(--taupe); }
+  .gifted-owner .link.quiet { font-size: 13px; color: var(--taupe); text-decoration: underline; padding: 0; }
+  .gifted-owner .link.quiet.danger { color: #B3423A; font-weight: 600; }
   .gf-similar { background: var(--rose-lt); border-radius: 10px; padding: 10px 12px; font-size: 14px; margin: 8px 0 4px; line-height: 1.45; }
   /* Family page */
   .back-row { margin: -6px 0 4px; }
@@ -635,6 +637,6 @@
 </head>
 <body>
   <div id="app"></div>
-  <script type="module" src="app.js?v=1021-0522"></script>
+  <script type="module" src="app.js?v=1021-0535"></script>
 </body>
 </html>

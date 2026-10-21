@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1021-0522";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1021-0522";
-const BUILD = "1021-0522"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1021-0535";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1021-0535";
+const BUILD = "1021-0535"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = CONFIG.tabs || ["wishlist", "closet", "sizes"];
@@ -417,7 +417,7 @@ function giftedView() {
       <input type="search" id="gifted-search" class="in" value="${esc(giftedQuery)}" placeholder="Already have a dinosaur? Search" aria-label="Search gifts already bought" autocomplete="off" enterkeyhint="search" />
     </div>
     <div id="gifted-results">${giftedResults()}</div>
-    ${owner() && all.length ? `<div class="gifted-owner"><button class="link danger" data-act="clear-gifted" ${dis("clear-gifted")}>${armedLabel("clear-gifted", "Start Fresh", "Tap again to clear the whole list")}</button></div>` : ""}`;
+    ${owner() && all.length ? `<div class="gifted-owner">After the holidays? <button class="link quiet${armed.has("clear-gifted") ? " danger" : ""}" data-act="clear-gifted" ${dis("clear-gifted")}>${armedLabel("clear-gifted", "Clear this page", "Confirm: delete every entry")}</button></div>` : ""}`;
 }
 // Wishlist items someone claimed also show here, so this page is the one place to check before buying.
 function claimedAsGifts() {
@@ -438,7 +438,7 @@ function giftedRow(g) {
   const mine = S.mine.has(g.id);
   const cat = (GIFT_CATS.find(([k]) => k === g.cat) || [, "Other"])[1];
   const actions = g.fromList ? ""
-    : owner() ? `<span class="gifted-mine"><button class="link" data-act="edit-gifted" data-id="${g.id}">Edit</button>${S.private?.giftLinks?.[g.id] ? `<button class="link" data-act="gifted-photo" data-id="${g.id}">${g.image ? "Change Photo" : "Add Photo"}</button>` : ""}<button class="link danger" data-act="delete-gifted" data-id="${g.id}" ${dis(`dg:${g.id}`)}>${armedLabel(`dg:${g.id}`, "Delete", "Tap again")}</button></span>`
+    : owner() ? `<span class="gifted-mine"><button class="link" data-act="edit-gifted" data-id="${g.id}">Edit</button>${S.private?.giftLinks?.[g.id] ? `<button class="link" data-act="gifted-photo" data-id="${g.id}">${g.image ? "Change Photo" : "Add Photo"}</button>` : ""}<button class="link danger" data-act="delete-gifted" data-id="${g.id}" ${dis(`dg:${g.id}`)}>${armedLabel(`dg:${g.id}`, "Delete", "Confirm Delete")}</button></span>`
     : mine ? `<span class="gifted-mine"><button class="link" data-act="edit-gifted" data-id="${g.id}">Edit</button><button class="link" data-act="remove-gifted" data-id="${g.id}" ${dis(`rg:${g.id}`)}>Remove</button></span>` : "";
   return `<li class="gifted-row${g.fromList ? " from-list" : ""}">
     ${g.image ? `<img class="gifted-img" src="${esc(g.image)}" alt="" referrerpolicy="no-referrer" loading="lazy" onerror="this.remove()">` : ""}
@@ -566,7 +566,7 @@ function guideSteps() {
     { icon: "✅", title: "When someone's getting it", text: `A gift someone picked shows <b>Claimed</b>, with their name if they left one. When it arrives, tap <b>Received</b>: it leaves the list${HAS_THANKS ? ` and their name goes on your <b>Thank-You Notes</b>, at the bottom of the Wishlist page` : ""}.` },
     ...(tree ? [
       { icon: "🎄", title: t.title, text: `The <b>${esc(t.tab)}</b> page is for gifts that <i>aren't</i> on your wishlist. Guests tap <b>I Already Got Something</b>, type what it is (or paste a link), and everyone can see it, so nobody doubles up. Gifts claimed from your wishlist show up here too.` },
-      { icon: "🧹", title: `Tidying up ${esc(t.tab)}`, text: `Tap <b>Edit</b> to fix any entry, or <b>Delete</b> to remove it. If a guest pasted a link, tap <b>Add Photo</b> to pull a picture from the store.${HAS_THANKS ? " Names guests leave go on your <b>Thank-You Notes</b>." : ""} After the holidays, tap <b>Start Fresh</b> to clear the page.` },
+      { icon: "🧹", title: `Tidying up ${esc(t.tab)}`, text: `Tap <b>Edit</b> to fix any entry, or <b>Delete</b> to remove it. If a guest pasted a link, tap <b>Add Photo</b> to pull a picture from the store.${HAS_THANKS ? " Names guests leave go on your <b>Thank-You Notes</b>." : ""} After the holidays, tap <b>Clear this page</b> at the very bottom to empty it.` },
     ] : []),
     { icon: "🙂", title: "You can't break anything", text: `Tap <b>Edit</b> on any gift to change or delete it. Still deciding about something? Open <b>More details</b> and tick <b>Hide from guests</b>. You can reopen this guide anytime from <b>How This Works</b>.` },
   ];
@@ -1345,7 +1345,7 @@ function photoPickerSheet(only = null) {
       const listEl = el.querySelector(".pf-list");
       let left = [...targets];
       const next5 = el.querySelector('[data-m="next5"]');
-      const draw = () => { listEl.innerHTML = left.length ? left.map(rowHtml).join("") : `<p class="muted">${only ? "Photo saved." : "Every print and toy has a photo now."}</p>`; if (next5) next5.hidden = !left.some((t) => !res[t.rec.id]); };
+      const draw = () => { listEl.innerHTML = left.length ? left.map(rowHtml).join("") : `<p class="muted">Every print and toy has a photo now.</p>`; if (next5) next5.hidden = !left.some((t) => !res[t.rec.id]); };
       const drawRow = (t) => { const n = listEl.querySelector(`.pf-row[data-id="${t.rec.id}"]`); if (n) n.outerHTML = rowHtml(t); };
       const find = (id) => left.find((t) => t.rec.id === id);
       draw();
@@ -1370,7 +1370,8 @@ function photoPickerSheet(only = null) {
           row.querySelectorAll(".pf-choice").forEach((x) => (x.disabled = true));
           try {
             await store.setPhoto(t.kind, t.rec.id, c.image, c.url);
-            left = left.filter((x) => x !== t); draw(); toast("Photo saved");
+            if (only) { closeSheet(false); toast("Photo saved ✓"); return; } // one entry: back to the page, where the new photo shows
+            left = left.filter((x) => x !== t); draw(); toast("Photo saved ✓");
           } catch (e) { res[t.rec.id] = { state: "error", msg: e?.message || "Couldn't save that photo." }; drawRow(t); }
         }
       });
