@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1021-0507";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1021-0507";
-const BUILD = "1021-0507"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1021-0512";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1021-0512";
+const BUILD = "1021-0512"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = CONFIG.tabs || ["wishlist", "closet", "sizes"];
@@ -302,10 +302,11 @@ function wishlistView() {
       </div>
     </div>
     ${owner() && (busy.has("starters") || (!all.length && !list(S.private?.drafts).length)) && (CONFIG.starterItems || []).length ? starterCard() : ""}
-    ${owner() ? thanksView() : ""}
+    ${owner() && HAS_THANKS ? thanksView() : ""}
     ${sections || `<div class="empty">${wlBudget !== "any" ? "Nothing in that price range right now." : "Nothing here right now."}</div>`}`;
 }
 
+const HAS_THANKS = CONFIG.thanks !== false; // Luca's page has no Thank-You Notes
 // Owner only: who to thank. Names come from the private document via the API.
 let thanksOpen = false;
 function thanksView() {
@@ -352,7 +353,7 @@ function claimSheet(id) {
     `<h2>Getting This?</h2>
      <p class="muted">${esc(it.title || "This gift")}</p>
      <label class="f" for="cl-from">Your name <span class="muted">(optional)</span></label>
-     <input class="in" id="cl-from" maxlength="40" value="${esc(saved)}" placeholder="So ${who} can say thank you" autocomplete="name" />
+     <input class="in" id="cl-from" maxlength="40" value="${esc(saved)}" placeholder="${HAS_THANKS ? `So ${who} can say thank you` : `So ${who} knows who's getting it`}" autocomplete="name" />
      <p class="muted small-note">Only ${who} sees your name. Everyone else just sees that it's taken.</p>
      <div class="err sheet-err" hidden></div>
      <div class="sheet-actions"><span class="spacer"></span><button class="btn ghost" data-act="cancel">Cancel</button><button class="btn" data-act="save">I'll Get This</button></div>`,
@@ -487,7 +488,7 @@ function giftedSheet(existing = null) {
      <div id="gf-similar" class="gf-similar" hidden></div>
      <div class="seg" data-g="cat">${GIFT_CATS.map(([k, l]) => `<button type="button" data-v="${k}" aria-pressed="${k === cat}">${l}</button>`).join("")}</div>
      <div id="gf-size-row" ${cat === "clothes" ? "" : "hidden"}><label class="f" for="gf-size">Size</label>${sizeSelect('id="gf-size"', e.size || "", { kind: "both", blank: "Size (optional)" })}</div>
-     ${existing ? "" : `<label class="f" for="gf-from">Your name <span class="muted">(optional)</span></label>
+     ${existing ? "" : !HAS_THANKS ? `<p class="muted nt-note">You can edit or remove your entry later from this phone or computer.</p>` : `<label class="f" for="gf-from">Your name <span class="muted">(optional)</span></label>
      <input class="in" id="gf-from" maxlength="40" placeholder="So ${esc(CONFIG.babyName)}'s family can say thank you" autocomplete="name" />
      <p class="muted nt-note">Only ${esc(CONFIG.ownerName || "the family")} sees your name. You can edit or remove your entry later from this phone or computer.</p>`}
      <div class="err sheet-err" hidden></div>
@@ -537,7 +538,7 @@ function giftedSheet(existing = null) {
         const link = $("#gf-link").value.trim();
         if (link && !/^https?:\/\/\S+\.\S+/i.test(link)) throw new Error("That link doesn't look right. Copy it from the store page, or leave it blank.");
         if (existing) { await store.editGifted(item, owner() ? link : link || undefined); return "Saved"; }
-        await store.addGifted(item, $("#gf-from").value.trim(), link);
+        await store.addGifted(item, $("#gf-from")?.value.trim() || "", link);
         return "Added. Thank you!";
       });
     }
@@ -556,10 +557,10 @@ function guideSteps() {
     { icon: "👋", title: `Welcome to ${n}'s Wishlist`, text: `This is your page. Family and friends open your link, see the list, and tap <b>I'll get this</b> so nobody buys the same thing twice. Only you can change the list.${tree ? ` There are two pages: <b>Wishlist</b> and <b>${esc(t.tab)}</b>. Switch between them with the buttons at the bottom of the screen.` : ""}` },
     { icon: "🎁", title: "Add a gift", text: `Tap <b>+ Add a Gift</b>. Paste a link from any store's website and tap <b>Fill in</b>: the photo, name and price fill in for you. Then tap <b>Save</b>. No link? Just type a name.` },
     { icon: "💌", title: "Share the list", text: `Tap <b>Share ${n}'s List</b> to copy the link (paste it into a text or email) or to show a QR code people can scan with their phone camera.` },
-    { icon: "✅", title: "When someone's getting it", text: `A gift someone picked shows <b>Claimed</b>, with their name if they left one. When it arrives, tap <b>Received</b>: it leaves the list and their name goes on your <b>Thank-You Notes</b>, at the bottom of the Wishlist page.` },
+    { icon: "✅", title: "When someone's getting it", text: `A gift someone picked shows <b>Claimed</b>, with their name if they left one. When it arrives, tap <b>Received</b>: it leaves the list${HAS_THANKS ? ` and their name goes on your <b>Thank-You Notes</b>, at the bottom of the Wishlist page` : ""}.` },
     ...(tree ? [
       { icon: "🎄", title: t.title, text: `The <b>${esc(t.tab)}</b> page is for gifts that <i>aren't</i> on your wishlist. Guests tap <b>I Already Got Something</b>, type what it is (or paste a link), and everyone can see it, so nobody doubles up. Gifts claimed from your wishlist show up here too.` },
-      { icon: "🧹", title: `Tidying up ${esc(t.tab)}`, text: `Tap <b>Edit</b> to fix any entry, or <b>Delete</b> to remove it. If a guest pasted a link, tap <b>Add Photo</b> to pull a picture from the store. Names guests leave go on your <b>Thank-You Notes</b>. After the holidays, tap <b>Start Fresh</b> to clear the page.` },
+      { icon: "🧹", title: `Tidying up ${esc(t.tab)}`, text: `Tap <b>Edit</b> to fix any entry, or <b>Delete</b> to remove it. If a guest pasted a link, tap <b>Add Photo</b> to pull a picture from the store.${HAS_THANKS ? " Names guests leave go on your <b>Thank-You Notes</b>." : ""} After the holidays, tap <b>Start Fresh</b> to clear the page.` },
     ] : []),
     { icon: "🙂", title: "You can't break anything", text: `Tap <b>Edit</b> on any gift to change or delete it. Still deciding about something? Open <b>More details</b> and tick <b>Hide from guests</b>. You can reopen this guide anytime from <b>How This Works</b>.` },
   ];

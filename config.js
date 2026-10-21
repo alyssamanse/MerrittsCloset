@@ -73,6 +73,7 @@ const SITES = {
     tagline: "Gift ideas for Luca, and a way to make sure nobody doubles up",
     tabs: ["wishlist", "gifted"],                  // wishlist + "Already Under the Tree"; no closet, sizes or family
     guide: true,                                   // first-time tutorial, big Add/Share buttons, simpler form, sign-in link
+    thanks: false,                                 // no Thank-You Notes section
     family: [],
     pronoun: { her: "his", she: "he" },
     monogram: "L",

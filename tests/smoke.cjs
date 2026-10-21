@@ -247,7 +247,7 @@ const openSheet = async (p, sel, expectTitle) => {
     await l.fill("#gf-what", "Toddler rain boots"); await l.click('.seg[data-g="cat"] [data-v="clothes"]');
     must(await l.locator("#gf-size-row").isVisible(), "no size for clothes");
     must(await l.locator("#gf-url").count() === 0, "link field still offered to guests");
-    await l.fill("#gf-from", "Aunt Jen");
+    must(await l.locator("#gf-from").count() === 0, "name box shown on a page without thank-you notes");
     await l.click('.sheet-bg [data-act="save"]'); await l.waitForTimeout(600);
     const row = l.locator(".gifted-row", { hasText: "Toddler rain boots" });
     must(await row.count() === 1, "entry not shown");
@@ -275,6 +275,9 @@ const openSheet = async (p, sel, expectTitle) => {
     if (await ok.count()) { await ok.click(); await lo.waitForTimeout(600); }
     await lo.click("[data-tab=gifted]"); await lo.waitForTimeout(250);
     must(await lo.locator(".gifted-row.from-list").count() === 1, "claimed item not under the tree");
+    await lo.click("[data-tab=wishlist]"); await lo.waitForTimeout(200);
+    must(await lo.locator(".thanks").count() === 0, "thank-you notes shown on Luca's page");
+    await lo.click("[data-tab=gifted]"); await lo.waitForTimeout(200);
     must(await lo.locator(".gifted-row.from-list [data-act]").count() === 0, "claimed rows should have no buttons here");
     await lo.locator("[data-act=signin]").first().click(); await lo.waitForTimeout(500);
     for (let k = 0; k < 8 && await lo.locator(".guide").count(); k++) await lo.click('.guide [data-m="next"]');
