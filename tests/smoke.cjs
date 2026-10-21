@@ -251,7 +251,12 @@ const openSheet = async (p, sel, expectTitle) => {
     must(!(await l.locator("main").innerText()).includes("Aunt Jen"), "name shown to guests");
     must(await row.locator("[data-act=remove-gifted]").count() === 1, "can't remove own entry");
     must(await l.locator(".gifted-row", { hasText: "Wooden train set" }).locator("[data-act=remove-gifted]").count() === 0, "can remove someone else's");
-    await row.locator("[data-act=remove-gifted]").click(); await l.waitForTimeout(500);
+    must(await l.locator(".gifted-row", { hasText: "Wooden train set" }).locator("[data-act=edit-gifted]").count() === 0, "can edit someone else's");
+    await row.locator("[data-act=edit-gifted]").click(); await l.waitForTimeout(250);
+    must((await l.inputValue("#gf-what")) === "Toddler rain boots", "edit form not prefilled");
+    await l.fill("#gf-what", "Toddler rain boots (navy)"); await l.click('.sheet-bg [data-act="save"]'); await l.waitForTimeout(600);
+    must(await l.locator(".gifted-row", { hasText: "Toddler rain boots (navy)" }).count() === 1, "edit not saved");
+    await l.locator(".gifted-row", { hasText: "Toddler rain boots" }).locator("[data-act=remove-gifted]").click(); await l.waitForTimeout(500);
     must(await l.locator(".gifted-row", { hasText: "Toddler rain boots" }).count() === 0, "not removed");
   });
   await step("Luca's page: owner adds the example gifts in one tap", async () => {

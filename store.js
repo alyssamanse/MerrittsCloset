@@ -10,7 +10,7 @@
 //   • Retries are capped (2) with backoff, only for transient errors, and every
 //     change is idempotent on the server, so a retry can't double a write.
 //   • Identical in-flight requests are merged (double taps send one request).
-import { CONFIG } from "./config.js?v=1020-2053";
+import { CONFIG } from "./config.js?v=1020-2103";
 
 const SDK = "https://www.gstatic.com/firebasejs/11.0.2";
 const CACHE_KEY = `closet:${CONFIG.wishlistId}`;
@@ -214,6 +214,7 @@ export async function createFirebaseStore() {
     claim: (itemId, from = "") => mutate("claim", { itemId, key: claimKey(), ...(from && { from }) }),
     unclaim: (itemId) => mutate("unclaim", { itemId, key: claimKey() }),
     addGifted: (item, from = "") => mutate("addGifted", { item, key: claimKey(), ...(from && { from }) }),
+    editGifted: (item) => mutate("editGifted", { item, key: claimKey() }),
     removeGifted: (id) => mutate("removeGifted", { id, key: claimKey() }),
     deleteGifted: (id) => mutate("deleteGifted", { id }),
     clearGifted: () => mutate("clearGifted", {}),
@@ -358,6 +359,7 @@ export function createDemoStore() {
     signOut: m(() => { user = null; }),
     claim: m((id, from = "") => { if (data.claims[id]?.h) throw new FriendlyError("Someone already claimed this one."); data.claims[id] = { h: "mine", at: Date.now() }; mine.add(id); if (from) priv.givers[id] = { from, at: Date.now() }; }),
     addGifted: m((item, from = "") => { data.gifted = data.gifted || {}; data.gifted[item.id] = { ...item, h: "mine", at: Date.now() }; mine.add(item.id); if (from) addThank(item.what, from); }),
+    editGifted: m((item) => { const g = data.gifted?.[item.id]; if (!g || !mine.has(item.id)) throw new FriendlyError("Only the person who added it can change it."); Object.assign(g, { what: item.what, cat: item.cat, size: item.size }); }),
     removeGifted: m((id) => { delete data.gifted?.[id]; mine.delete(id); }),
     deleteGifted: m((id) => { delete data.gifted?.[id]; }),
     clearGifted: m(() => { data.gifted = {}; }),

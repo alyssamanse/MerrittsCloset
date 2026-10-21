@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1020-2053";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1020-2053";
-const BUILD = "1020-2053"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1020-2103";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1020-2103";
+const BUILD = "1020-2103"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = CONFIG.tabs || ["wishlist", "closet", "sizes"];
@@ -433,30 +433,31 @@ function giftedRow(g) {
       <div class="chips"><span class="chip ink">${esc(cat)}</span>${g.size ? `<span class="chip">Size ${esc(g.size)}</span>` : ""}<span class="muted gifted-date">Added ${fmtShort(g.at)}</span></div>
     </div>
     ${owner() ? `<button class="link danger" data-act="delete-gifted" data-id="${g.id}" ${dis(`dg:${g.id}`)}>${armedLabel(`dg:${g.id}`, "Delete", "Tap again")}</button>`
-      : mine ? `<button class="link" data-act="remove-gifted" data-id="${g.id}" ${dis(`rg:${g.id}`)}>Remove</button>` : ""}
+      : mine ? `<span class="gifted-mine"><button class="link" data-act="edit-gifted" data-id="${g.id}">Edit</button><button class="link" data-act="remove-gifted" data-id="${g.id}" ${dis(`rg:${g.id}`)}>Remove</button></span>` : ""}
   </li>`;
 }
 // Words worth comparing ("wooden train set" vs "train set by Brio").
 const keyWords = (t) => fold(String(t || "")).split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !["the", "and", "set", "for", "with", "toy", "kids", "baby"].includes(w));
 const looksSame = (a, b) => { const A = new Set(keyWords(a)), B = keyWords(b); if (!A.size || !B.length) return false; const hit = B.filter((w) => A.has(w)).length; return hit >= Math.min(2, A.size, B.length); };
-function giftedSheet() {
-  let cat = "toy";
-  const gid = newId();
+function giftedSheet(existing = null) {
+  const e = existing || {};
+  let cat = e.cat || "toy";
+  const gid = e.id || newId();
   openSheet(
-    `<h2>I Already Got Something</h2>
-     <p class="muted">So nobody else buys the same thing. Everyone visiting the list will see what you add (but not your name).</p>
+    `<h2>${existing ? "Edit Your Gift" : "I Already Got Something"}</h2>
+     <p class="muted">${existing ? "Change what you added. Everyone visiting the list sees the update." : "So nobody else buys the same thing. Everyone visiting the list will see what you add (but not your name)."}</p>
      <label class="f" for="gf-what">What is it?</label>
-     <input class="in" id="gf-what" maxlength="80" placeholder="Wooden train set" autocomplete="off" />
+     <input class="in" id="gf-what" maxlength="80" placeholder="Wooden train set" autocomplete="off" value="${esc(e.what || "")}" />
      <div id="gf-similar" class="gf-similar" hidden></div>
      <div class="seg" data-g="cat">${GIFT_CATS.map(([k, l]) => `<button type="button" data-v="${k}" aria-pressed="${k === cat}">${l}</button>`).join("")}</div>
-     <div id="gf-size-row" hidden><label class="f" for="gf-size">Size</label>${sizeSelect('id="gf-size"', "", { kind: "both", blank: "Size (optional)" })}</div>
-     <label class="f" for="gf-from">Your name <span class="muted">(optional)</span></label>
+     <div id="gf-size-row" ${cat === "clothes" ? "" : "hidden"}><label class="f" for="gf-size">Size</label>${sizeSelect('id="gf-size"', e.size || "", { kind: "both", blank: "Size (optional)" })}</div>
+     ${existing ? "" : `<label class="f" for="gf-from">Your name <span class="muted">(optional)</span></label>
      <input class="in" id="gf-from" maxlength="40" placeholder="So ${esc(CONFIG.babyName)}'s family can say thank you" autocomplete="name" />
-     <p class="muted nt-note">Only ${esc(CONFIG.ownerName || "the family")} sees your name. You can remove your entry later from this phone or computer.</p>
+     <p class="muted nt-note">Only ${esc(CONFIG.ownerName || "the family")} sees your name. You can edit or remove your entry later from this phone or computer.</p>`}
      <div class="err sheet-err" hidden></div>
      <div class="sheet-actions"><span class="spacer"></span>
        <button class="btn ghost" data-act="cancel">Cancel</button>
-       <button class="btn" data-act="save">Add It</button></div>`,
+       <button class="btn" data-act="save">${existing ? "Save" : "Add It"}</button></div>`,
     (el) => {
       const $ = (q) => el.querySelector(q);
       setTimeout(() => $("#gf-what").focus(), 50);
@@ -469,7 +470,7 @@ function giftedSheet() {
       // While typing: show anything that looks like the same gift, already added or on the wishlist.
       $("#gf-what").addEventListener("input", () => {
         const v = $("#gf-what").value;
-        const dupes = list(S.data.gifted).filter((g) => looksSame(v, g.what)).slice(0, 3);
+        const dupes = list(S.data.gifted).filter((g) => g.id !== gid && looksSame(v, g.what)).slice(0, 3);
         const wish = list(S.data.items).filter((i) => !isClaimed(i.id) && looksSame(v, i.title)).slice(0, 2);
         const box = $("#gf-similar");
         box.innerHTML = [
@@ -483,7 +484,9 @@ function giftedSheet() {
       wireSave(el, async () => {
         const what = $("#gf-what").value.trim();
         if (!what) throw new Error("Tell us what it is.");
-        await store.addGifted({ id: gid, what, cat, size: cat === "clothes" ? $("#gf-size").value : "" }, $("#gf-from").value.trim());
+        const item = { id: gid, what, cat, size: cat === "clothes" ? $("#gf-size").value : "" };
+        if (existing) { await store.editGifted(item); return "Saved"; }
+        await store.addGifted(item, $("#gf-from").value.trim());
         return "Added. Thank you!";
       });
     }
@@ -2408,6 +2411,7 @@ $app.addEventListener("click", (ev) => {
     case "notify": return notifySheet(id);
     case "guide": return guideSheet();
     case "add-gifted": return giftedSheet();
+    case "edit-gifted": return S.mine.has(id) && S.data.gifted?.[id] ? giftedSheet(S.data.gifted[id]) : undefined;
     case "remove-gifted": return act(`rg:${id}`, () => store.removeGifted(id), "Removed");
     case "delete-gifted": if (confirmTap(`dg:${id}`)) act(`dg:${id}`, () => store.deleteGifted(id), "Deleted"); return;
     case "clear-gifted": if (confirmTap("clear-gifted")) act("clear-gifted", () => store.clearGifted(), "Cleared. Ready for next time"); return;

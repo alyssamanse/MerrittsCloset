@@ -209,7 +209,7 @@ const brandKey = (name) => {
 // (state | null, action, payload, { isOwner, now }) → { state, changed }
 // Every action changes at most one document. Repeating an action is a no-op
 // (changed: false → no write), which makes client retries safe.
-const GUEST_ACTIONS = new Set(["claim", "unclaim", "subscribe", "addGifted", "removeGifted"]);
+const GUEST_ACTIONS = new Set(["claim", "unclaim", "subscribe", "addGifted", "editGifted", "removeGifted"]);
 const OWNER_ACTIONS = new Set(["init", "setVisibility", "upsertBrand", "deleteBrand", "upsertItem", "deleteItem", "receive", "upsertPrint", "deletePrint", "upsertToy", "deleteToy", "setFavoriteStyles", "addType", "renameType", "deleteType", "resetClaim", "importBatch", "setColors", "setImages", "setPlan", "deletePlan", "setStock", "upsertFamilyItem", "deleteFamilyItem", "upsertStyleFav", "deleteStyleFav", "bulkCloset", "undoBulkDelete", "confirmSizes", "hideItem", "showItem", "setObsessions", "setPhoto", "deleteGifted", "clearGifted"]);
 
 function reduce(prev, action, payload, { isOwner, now, priv = null }) {
@@ -276,6 +276,19 @@ function reduce(prev, action, payload, { isOwner, now, priv = null }) {
       const mineCount = Object.entries(state.gifted).filter(([gid, x]) => x.h === claimHash(p.key, gid)).length;
       if (mineCount >= LIMITS.activeClaimsPerKey) throw new ApiError(429, "That's a lot of gifts! Remove one first.", 60);
       state.gifted[g.id] = { ...g, h, at: now };
+      break;
+    }
+    case "editGifted": {
+      // The guest who added an entry can fix it (what it is, category, size). Same device key as adding.
+      onlyKeys(p, ["item", "key"], "payload");
+      if (typeof p.key !== "string" || !KEY_RE.test(p.key)) bad("Invalid key");
+      const g = cleanGifted(p.item);
+      const cur = state.gifted[g.id];
+      if (!cur) throw new ApiError(404, "That entry isn't on the list anymore.");
+      if (cur.h !== claimHash(p.key, g.id)) throw new ApiError(403, "Only the person who added it can change it.");
+      const next = { ...cur, what: g.what, cat: g.cat, size: g.size };
+      if (JSON.stringify(next) === JSON.stringify(cur)) return same;
+      state.gifted[g.id] = next;
       break;
     }
     case "removeGifted": {
@@ -839,6 +852,9 @@ function reducePrivate(prevPriv, action, payload, { prevPublic, nextPublic, publ
   } else if (publicChanged && action === "addGifted") {
     const from = str(p.from, "Name", 40);
     if (from) addThank(p.item.what, from, p.item.id);
+  } else if (publicChanged && action === "editGifted") {
+    // Keep a not-yet-written thank-you in step with the new description.
+    for (const t of Object.values(priv.thanks)) if (t.itemId === p.item.id && !t.done) t.title = String(p.item.what || "").slice(0, 120);
   } else if (publicChanged && (action === "removeGifted" || action === "deleteGifted")) {
     for (const [tid, t] of Object.entries(priv.thanks)) if (t.itemId === p.id && !t.done) delete priv.thanks[tid];
   } else if (publicChanged) {

@@ -576,7 +576,9 @@
   .gifted-main .chips { margin-top: 6px; align-items: center; }
   .gifted-date { font-size: 12.5px; }
   .gifted-link { display: inline-block; padding-left: 0; margin-top: 4px; font-size: 13.5px; }
-  .gifted-row > .link { flex: none; }
+  .gifted-row > .link, .gifted-mine { flex: none; }
+  .gifted-mine { display: flex; flex-direction: column; align-items: flex-end; }
+  .gifted-mine .link { padding: 2px 0; }
   .gifted-owner { text-align: center; margin: 18px 0 0; }
   .gf-similar { background: var(--rose-lt); border-radius: 10px; padding: 10px 12px; font-size: 14px; margin: 8px 0 4px; line-height: 1.45; }
   /* Family page */
@@ -641,6 +643,6 @@
 <body>
   <div id="app"></div>
   <script>window.CLOSET_SITE = "luca";</script>
-  <script type="module" src="../app.js?v=1020-2053"></script>
+  <script type="module" src="../app.js?v=1020-2103"></script>
 </body>
 </html>

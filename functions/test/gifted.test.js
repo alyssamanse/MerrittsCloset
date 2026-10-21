@@ -64,3 +64,18 @@ test("switched off unless the server enables it (Merritt's list never takes gues
   try { assert.equal((await call("addGifted", { item: gift("gift_00000011"), key: key() })).status, 404); }
   finally { process.env.GUEST_GIFTED = "true"; }
 });
+
+
+test("the guest who added an entry can edit it; nobody else can", async () => {
+  fresh();
+  const k = key();
+  await call("addGifted", { item: gift("gift_edit0001"), key: k, from: "Uncle Bo" });
+  const r = await call("editGifted", { item: gift("gift_edit0001", { what: "Wooden train set + bridge", cat: "toy" }), key: k });
+  assert.equal(r.status, 200);
+  assert.equal(store.docs[MAIN].gifted.gift_edit0001.what, "Wooden train set + bridge");
+  assert.equal(Object.values(store.docs[PRIV].thanks)[0].title, "Wooden train set + bridge", "thank-you follows the edit");
+  assert.equal((await call("editGifted", { item: gift("gift_edit0001", { what: "Hacked" }), key: key() })).status, 403);
+  assert.equal((await call("editGifted", { item: gift("gift_edit0001", { url: "https://x.com" }), key: k })).status, 400, "still no links");
+  assert.equal((await call("editGifted", { item: gift("gift_nope0001"), key: k })).status, 404);
+  assert.equal(store.docs[MAIN].gifted.gift_edit0001.what, "Wooden train set + bridge");
+});
