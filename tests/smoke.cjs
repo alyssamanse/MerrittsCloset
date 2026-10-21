@@ -289,7 +289,7 @@ const openSheet = async (p, sel, expectTitle) => {
     must(!(await lo.locator("#gifted-results").innerText()).includes("Added "), "added date still shown");
     await lo.locator(".gifted-row", { hasText: "Dinosaur pajamas" }).locator("[data-act=gifted-photo]").click(); await lo.waitForTimeout(800);
     await lo.locator(".pf-choice").first().click(); await lo.waitForTimeout(600);
-    await lo.click('.sheet-bg [data-act="cancel"]'); await lo.waitForTimeout(250);
+    must(await lo.locator(".sheet-bg").count() === 0, "photo picker didn't close after saving");
     must(await lo.locator(".gifted-row", { hasText: "Dinosaur pajamas" }).locator(".gifted-img").count() === 1, "photo not shown");
     await lo.close();
   });

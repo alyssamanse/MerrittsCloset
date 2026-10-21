@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1021-0535";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1021-0535";
-const BUILD = "1021-0535"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1021-0538";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1021-0538";
+const BUILD = "1021-0538"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = CONFIG.tabs || ["wishlist", "closet", "sizes"];
@@ -1370,7 +1370,7 @@ function photoPickerSheet(only = null) {
           row.querySelectorAll(".pf-choice").forEach((x) => (x.disabled = true));
           try {
             await store.setPhoto(t.kind, t.rec.id, c.image, c.url);
-            if (only) { closeSheet(false); toast("Photo saved ✓"); return; } // one entry: back to the page, where the new photo shows
+            if (only) { closeSheet(); toast("Photo saved ✓"); return; } // one entry: back to the page, where the new photo shows
             left = left.filter((x) => x !== t); draw(); toast("Photo saved ✓");
           } catch (e) { res[t.rec.id] = { state: "error", msg: e?.message || "Couldn't save that photo." }; drawRow(t); }
         }
