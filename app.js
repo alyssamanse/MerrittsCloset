@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1021-0538";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1021-0538";
-const BUILD = "1021-0538"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1021-0948";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1021-0948";
+const BUILD = "1021-0948"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = CONFIG.tabs || ["wishlist", "closet", "sizes"];
@@ -580,17 +580,33 @@ function guideSheet() {
       <div class="sheet-actions"><button class="link" data-m="skip">Skip</button><span class="spacer"></span>
         <button class="btn ghost" data-m="back">Back</button><button class="btn" data-m="next">Next</button></div></div>`,
     (el) => {
-      const draw = () => {
+      const body = el.querySelector(".guide-body");
+      const draw = (dir = 0) => {
         const st = steps[i];
-        el.querySelector(".guide-body").innerHTML = `<div class="guide-icon" aria-hidden="true">${st.icon}</div><h2>${st.title}</h2><p>${st.text}</p><p class="muted guide-count">${i + 1} of ${steps.length}</p>`;
+        body.classList.remove("in-left", "in-right"); void body.offsetWidth;   // restart the slide-in
+        if (dir) body.classList.add(dir > 0 ? "in-right" : "in-left");
+        body.innerHTML = `<div class="guide-icon" aria-hidden="true">${st.icon}</div><h2>${st.title}</h2><p>${st.text}</p><p class="muted guide-count">${i + 1} of ${steps.length}</p>`;
         el.querySelectorAll(".guide-dots i").forEach((d, k) => d.classList.toggle("on", k === i));
         el.querySelector('[data-m="back"]').hidden = i === 0;
         el.querySelector('[data-m="next"]').textContent = i === steps.length - 1 ? "Got It" : "Next";
         el.querySelector('[data-m="skip"]').hidden = i === steps.length - 1;
       };
       draw();
-      el.querySelector('[data-m="next"]').addEventListener("click", () => { if (i < steps.length - 1) { i++; draw(); } else closeSheet(); });
-      el.querySelector('[data-m="back"]').addEventListener("click", () => { if (i > 0) { i--; draw(); } });
+      const next = () => { if (i < steps.length - 1) { i++; draw(1); return true; } return false; };
+      const back = () => { if (i > 0) { i--; draw(-1); return true; } return false; };
+      el.querySelector('[data-m="next"]').addEventListener("click", () => { if (!next()) closeSheet(); });
+      el.querySelector('[data-m="back"]').addEventListener("click", back);
+      // Swipe left/right anywhere on the card. Mostly-sideways swipes only, so scrolling still works.
+      let sx = null, sy = 0;
+      const g = el.querySelector(".guide");
+      g.addEventListener("touchstart", (ev) => { const t = ev.touches[0]; sx = t.clientX; sy = t.clientY; }, { passive: true });
+      g.addEventListener("touchend", (ev) => {
+        if (sx === null) return;
+        const t = ev.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
+        sx = null;
+        if (Math.abs(dx) < 45 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+        if (dx < 0) next(); else back();
+      }, { passive: true });
       el.querySelector('[data-m="skip"]').addEventListener("click", () => closeSheet());
     });
 }

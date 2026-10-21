@@ -298,6 +298,17 @@ const openSheet = async (p, sel, expectTitle) => {
     const s = lo.locator("[data-act=signin]"); if (await s.count()) { await s.first().click(); await lo.waitForTimeout(400); }
     // First sign-in: the tutorial opens by itself; walk through it.
     await lo.waitForSelector(".guide", { timeout: 5000 });
+    // Swipe left to move on, right to go back.
+    const swipe = (dx) => lo.evaluate((dx) => {
+      const g = document.querySelector(".guide"), r = g.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + 100;
+      const tp = (cx) => new Touch({ identifier: 1, target: g, clientX: cx, clientY: y });
+      g.dispatchEvent(new TouchEvent("touchstart", { touches: [tp(x)], changedTouches: [tp(x)], bubbles: true }));
+      g.dispatchEvent(new TouchEvent("touchend", { touches: [], changedTouches: [tp(x + dx)], bubbles: true }));
+    }, dx);
+    const count = () => lo.locator(".guide-count").innerText();
+    must((await count()).startsWith("1 of"), "guide didn't start at 1");
+    await swipe(-120); must((await count()).startsWith("2 of"), "swipe left didn't go forward");
+    await swipe(120); must((await count()).startsWith("1 of"), "swipe right didn't go back");
     for (let k = 0; k < 8 && await lo.locator(".guide").count(); k++) await lo.click('.guide [data-m="next"]');
     must(await lo.locator(".guide").count() === 0, "guide didn't close");
     must(await lo.locator(".owner-bar [data-act=add]").count() === 1, "no big Add button");
