@@ -10,7 +10,7 @@
 //   • Retries are capped (2) with backoff, only for transient errors, and every
 //     change is idempotent on the server, so a retry can't double a write.
 //   • Identical in-flight requests are merged (double taps send one request).
-import { CONFIG } from "./config.js?v=1020-2103";
+import { CONFIG } from "./config.js?v=1020-2108";
 
 const SDK = "https://www.gstatic.com/firebasejs/11.0.2";
 const CACHE_KEY = `closet:${CONFIG.wishlistId}`;
@@ -416,12 +416,12 @@ export function createDemoStore() {
       await delay();
       const rec = data[kind]?.[id];
       if (!rec) throw new FriendlyError("That isn't in the list anymore.");
-      const name = rec.printName || rec.name || rec.title || "";
+      const name = rec.printName || rec.name || rec.title || rec.what || "";
       if (/nothing/i.test(name)) return { choices: [], searched: ["store", "web"], webConfigured: true };
       const shades = [["#F3DCD9", "#C98F95"], ["#E3E6D3", "#8E9A6F"], ["#EADFD3", "#B08F73"]];
       return { choices: shades.map(([bg, fg], k) => ({ image: img(bg, fg), url: `https://example.com/products/${encodeURIComponent(name.toLowerCase().replace(/\s+/g, "-"))}-${k + 1}`, title: `${name} ${["Zippy", "Romper", "Two-Piece"][k]}`, source: k ? "web" : "store" })), searched: ["store"], webConfigured: true };
     },
-    setPhoto: m((kind, id, image, url) => { const r = data[kind]?.[id]; if (!r) throw new FriendlyError("That isn't in the list anymore."); r.image = image; if (url && !r.url) r.url = url; }),
+    setPhoto: m((kind, id, image, url) => { const r = data[kind]?.[id]; if (!r) throw new FriendlyError("That isn't in the list anymore."); r.image = image; if (url && !r.url && kind !== "gifted") r.url = url; }),
     subscribe: m((itemId, email) => {
       const it = data.items[itemId];
       if (!it) throw new FriendlyError("That item isn't on the list anymore.");

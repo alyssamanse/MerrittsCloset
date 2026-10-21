@@ -79,3 +79,17 @@ test("the guest who added an entry can edit it; nobody else can", async () => {
   assert.equal((await call("editGifted", { item: gift("gift_nope0001"), key: k })).status, 404);
   assert.equal(store.docs[MAIN].gifted.gift_edit0001.what, "Wooden train set + bridge");
 });
+
+
+test("owner can add a photo to an Under the Tree entry; guests can't, and a guest edit keeps it", async () => {
+  fresh();
+  const k = key();
+  await call("addGifted", { item: gift("gift_photo001"), key: k });
+  assert.equal((await call("setPhoto", { kind: "gifted", id: "gift_photo001", image: "https://cdn.example.com/a.jpg" })).status, 403);
+  const r = await call("setPhoto", { kind: "gifted", id: "gift_photo001", image: "https://cdn.example.com/a.jpg", url: "https://shop.example.com/p" }, { token: "owner" });
+  assert.equal(r.status, 200);
+  assert.equal(store.docs[MAIN].gifted.gift_photo001.image, "https://cdn.example.com/a.jpg");
+  assert.equal(store.docs[MAIN].gifted.gift_photo001.url, undefined, "no link stored");
+  await call("editGifted", { item: gift("gift_photo001", { what: "Renamed" }), key: k });
+  assert.equal(store.docs[MAIN].gifted.gift_photo001.image, "https://cdn.example.com/a.jpg");
+});

@@ -549,13 +549,18 @@ function reduce(prev, action, payload, { isOwner, now, priv = null }) {
     case "setPhoto": {
       // A photo picked in Find Photos: its image and the product page it came from, on one record.
       onlyKeys(p, ["kind", "id", "image", "url"], "payload");
-      const kinds = { prints: "prints", items: "items", toys: "toys" };
+      const kinds = { prints: "prints", items: "items", toys: "toys", gifted: "gifted" };
       const kind = kinds[p.kind];
-      if (!kind) bad("kind must be prints, items or toys");
-      const rec = state[kind][id(p.id)];
+      if (!kind) bad("kind must be prints, items, toys or gifted");
+      const rec = (state[kind] || {})[id(p.id)];
       if (!rec) throw new ApiError(404, "That isn't in the list anymore.");
       const image = url(p.image, "Image");
       if (!image) bad("Pick a photo");
+      if (kind === "gifted") {                       // Under the Tree: a photo only, never a link
+        if (rec.image === image) return same;
+        rec.image = image;
+        break;
+      }
       const link = url(p.url, "Link");
       // The product link is filled in only if the record has none, so a link she chose is never replaced.
       const setLink = link && !rec.url;

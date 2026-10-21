@@ -239,6 +239,9 @@ const openSheet = async (p, sel, expectTitle) => {
     must((await l.locator("#gifted-results").innerText()).includes("looks safe to buy"), "no 'safe to buy' message");
     await l.fill("#gifted-search", "");
     await l.click("[data-act=add-gifted]"); await l.waitForTimeout(200);
+    await l.fill("#gf-link", "https://www.walmart.com/ip/Radio-Flyer-Classic-Red-Wagon/12345"); await l.waitForTimeout(100);
+    must((await l.inputValue("#gf-what")) === "Radio Flyer Classic Red Wagon", "pasted link didn't fill the name");
+    await l.fill("#gf-link", "");
     await l.fill("#gf-what", "Wooden train set with bridge"); await l.waitForTimeout(100);
     must((await l.locator("#gf-similar").innerText()).includes("Someone already added"), "no duplicate warning");
     await l.fill("#gf-what", "Toddler rain boots"); await l.click('.seg[data-g="cat"] [data-v="clothes"]');
@@ -258,6 +261,29 @@ const openSheet = async (p, sel, expectTitle) => {
     must(await l.locator(".gifted-row", { hasText: "Toddler rain boots (navy)" }).count() === 1, "edit not saved");
     await l.locator(".gifted-row", { hasText: "Toddler rain boots" }).locator("[data-act=remove-gifted]").click(); await l.waitForTimeout(500);
     must(await l.locator(".gifted-row", { hasText: "Toddler rain boots" }).count() === 0, "not removed");
+  });
+  await step("Luca's page: claimed wishlist items show under the tree; owner can add a photo", async () => {
+    const lo = await page(browser, "luca/?demo&admin");
+    const s = lo.locator("[data-act=signin]"); if (await s.count()) { await s.first().click(); await lo.waitForTimeout(400); }
+    for (let k = 0; k < 8 && await lo.locator(".guide").count(); k++) await lo.click('.guide [data-m="next"]');
+    await lo.click("[data-act=add-starters]"); await lo.waitForTimeout(800);
+    await lo.locator("footer [data-act=signout], [data-act=signout]").first().click(); await lo.waitForTimeout(500);
+    const claimBtn = lo.locator("[data-act=claim]").first();
+    must(await claimBtn.count() === 1, "no claim button");
+    await claimBtn.click(); await lo.waitForTimeout(300);
+    const ok = lo.locator('.sheet-bg [data-act="save"], .sheet-bg [data-act="claim-ok"], .sheet-bg .btn:not(.ghost)').first();
+    if (await ok.count()) { await ok.click(); await lo.waitForTimeout(600); }
+    await lo.click("[data-tab=gifted]"); await lo.waitForTimeout(250);
+    must(await lo.locator(".gifted-row.from-list").count() === 1, "claimed item not under the tree");
+    must(await lo.locator(".gifted-row.from-list [data-act]").count() === 0, "claimed rows should have no buttons here");
+    await lo.locator("[data-act=signin]").first().click(); await lo.waitForTimeout(500);
+    for (let k = 0; k < 8 && await lo.locator(".guide").count(); k++) await lo.click('.guide [data-m="next"]');
+    if (!(await lo.locator(".gifted-row").first().isVisible().catch(() => false))) { await lo.click("[data-tab=gifted]"); await lo.waitForTimeout(250); }
+    await lo.locator(".gifted-row", { hasText: "Dinosaur pajamas" }).locator("[data-act=gifted-photo]").click(); await lo.waitForTimeout(800);
+    await lo.locator(".pf-choice").first().click(); await lo.waitForTimeout(600);
+    await lo.click('.sheet-bg [data-act="cancel"]'); await lo.waitForTimeout(250);
+    must(await lo.locator(".gifted-row", { hasText: "Dinosaur pajamas" }).locator(".gifted-img").count() === 1, "photo not shown");
+    await lo.close();
   });
   await step("Luca's page: owner adds the example gifts in one tap", async () => {
     const lo = await page(browser, "luca/?demo&admin");

@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1020-2103";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1020-2103";
-const BUILD = "1020-2103"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1020-2108";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1020-2108";
+const BUILD = "1020-2108"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = CONFIG.tabs || ["wishlist", "closet", "sizes"];
@@ -417,9 +417,16 @@ function giftedView() {
     <div id="gifted-results">${giftedResults()}</div>
     ${owner() && all.length ? `<div class="gifted-owner"><button class="link danger" data-act="clear-gifted" ${dis("clear-gifted")}>${armedLabel("clear-gifted", "Start Fresh", "Tap again to clear the whole list")}</button></div>` : ""}`;
 }
+// Wishlist items someone claimed also show here, so this page is the one place to check before buying.
+function claimedAsGifts() {
+  return list(S.data.items).filter((i) => isClaimed(i.id)).map((i) => ({
+    id: i.id, what: [i.brand, i.title].filter(Boolean).join(" "), cat: catOf(i) === "clothes" ? "clothes" : catOf(i) === "toy" ? "toy" : "other",
+    size: catOf(i) === "clothes" ? i.size || "" : "", at: S.data.claims[i.id]?.at || i.addedAt || 0, image: i.image || "", fromList: true,
+  }));
+}
 function giftedResults() {
   const q = giftedQuery.trim();
-  const all = list(S.data.gifted).sort((a, b) => (b.at || 0) - (a.at || 0));
+  const all = [...list(S.data.gifted), ...claimedAsGifts()].sort((a, b) => (b.at || 0) - (a.at || 0));
   const shown = q ? all.filter((g) => matches(q, g.what, g.cat, g.size)) : all;
   if (!all.length) return `<div class="empty">Nothing yet. Be the first to add something you bought!</div>`;
   if (!shown.length) return `<div class="empty">Nobody's added “${esc(q)}” yet, so it looks safe to buy.</div>`;
@@ -428,13 +435,38 @@ function giftedResults() {
 function giftedRow(g) {
   const mine = S.mine.has(g.id);
   const cat = (GIFT_CATS.find(([k]) => k === g.cat) || [, "Other"])[1];
-  return `<li class="gifted-row">
+  const actions = g.fromList ? ""
+    : owner() ? `<span class="gifted-mine"><button class="link" data-act="gifted-photo" data-id="${g.id}">${g.image ? "Change Photo" : "Add Photo"}</button><button class="link danger" data-act="delete-gifted" data-id="${g.id}" ${dis(`dg:${g.id}`)}>${armedLabel(`dg:${g.id}`, "Delete", "Tap again")}</button></span>`
+    : mine ? `<span class="gifted-mine"><button class="link" data-act="edit-gifted" data-id="${g.id}">Edit</button><button class="link" data-act="remove-gifted" data-id="${g.id}" ${dis(`rg:${g.id}`)}>Remove</button></span>` : "";
+  return `<li class="gifted-row${g.fromList ? " from-list" : ""}">
+    ${g.image ? `<img class="gifted-img" src="${esc(g.image)}" alt="" referrerpolicy="no-referrer" loading="lazy" onerror="this.remove()">` : ""}
     <div class="gifted-main"><b>${esc(g.what)}</b>
-      <div class="chips"><span class="chip ink">${esc(cat)}</span>${g.size ? `<span class="chip">Size ${esc(g.size)}</span>` : ""}<span class="muted gifted-date">Added ${fmtShort(g.at)}</span></div>
+      <div class="chips"><span class="chip ink">${esc(cat)}</span>${g.size ? `<span class="chip">Size ${esc(g.size)}</span>` : ""}${g.fromList ? `<span class="chip">From the wishlist</span>` : ""}<span class="muted gifted-date">${g.fromList ? "Claimed" : "Added"} ${fmtShort(g.at)}</span></div>
     </div>
-    ${owner() ? `<button class="link danger" data-act="delete-gifted" data-id="${g.id}" ${dis(`dg:${g.id}`)}>${armedLabel(`dg:${g.id}`, "Delete", "Tap again")}</button>`
-      : mine ? `<span class="gifted-mine"><button class="link" data-act="edit-gifted" data-id="${g.id}">Edit</button><button class="link" data-act="remove-gifted" data-id="${g.id}" ${dis(`rg:${g.id}`)}>Remove</button></span>` : ""}
+    ${actions}
   </li>`;
+}
+// A product name from the words in a store link, worked out on this device. The link is never sent or saved.
+function nameFromLink(raw) {
+  let u; try { u = new URL(String(raw).trim()); } catch { return ""; }
+  if (!/^https?:$/.test(u.protocol)) return "";
+  const segs = u.pathname.split("/").map((x) => { try { return decodeURIComponent(x); } catch { return x; } }).filter(Boolean);
+  const after = (k) => { const n = segs.indexOf(k); return n >= 0 ? segs[n + 1] : ""; };
+  const before = (k) => { const n = segs.indexOf(k); return n > 0 ? segs[n - 1] : ""; };
+  const wordy = (x) => x && /[a-z].*[-_+ ].*[a-z]/i.test(x) && !/^[A-Z0-9]{8,}$/.test(x);
+  let pick = [before("dp"), before("gp"), after("ip"), after("p"), after("products"), after("product")].find(wordy)
+    || [...segs].reverse().find((x) => wordy(x.replace(/\.[a-z]{2,5}$/i, "")));
+  if (!pick) return "";
+  const words = pick.replace(/\.[a-z]{2,5}$/i, "").split(/[-_+ ]+/).filter((w) => w && !/^\d{5,}$/.test(w) && !/^[a-z]?\d+[a-z]?\d*$/i.test(w) || /^\d{1,3}$/.test(w));
+  const small = new Set(["and", "or", "of", "the", "a", "an", "for", "with", "in", "on", "to", "by"]);
+  const out = words.map((w, k) => /[A-Z]/.test(w.slice(1)) ? w : k && small.has(w.toLowerCase()) ? w.toLowerCase() : w[0].toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+  return out.slice(0, 80).trim();
+}
+function catFromName(t) {
+  const s = fold(t);
+  if (/\b(book|books|board book)\b/.test(s)) return "book";
+  if (/\b(shirt|tee|pajamas?|pjs?|jammies|romper|onesie|bodysuit|pants|joggers|shorts|dress|hoodie|sweater|sweatshirt|jacket|coat|shoes?|boots?|sneakers?|socks|hat|beanie|leggings|overalls|sleeper|zippy)\b/.test(s) && !/\b(play ?set|block set|train set|tool set|kitchen set)\b/.test(s)) return "clothes";
+  return "";
 }
 // Words worth comparing ("wooden train set" vs "train set by Brio").
 const keyWords = (t) => fold(String(t || "")).split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !["the", "and", "set", "for", "with", "toy", "kids", "baby"].includes(w));
@@ -446,6 +478,9 @@ function giftedSheet(existing = null) {
   openSheet(
     `<h2>${existing ? "Edit Your Gift" : "I Already Got Something"}</h2>
      <p class="muted">${existing ? "Change what you added. Everyone visiting the list sees the update." : "So nobody else buys the same thing. Everyone visiting the list will see what you add (but not your name)."}</p>
+     <label class="f" for="gf-link">Paste a link <span class="muted">(optional, fills in the name)</span></label>
+     <input class="in" id="gf-link" type="url" inputmode="url" placeholder="https://…" autocomplete="off" />
+     <p class="muted nt-note" id="gf-link-msg" hidden></p>
      <label class="f" for="gf-what">What is it?</label>
      <input class="in" id="gf-what" maxlength="80" placeholder="Wooden train set" autocomplete="off" value="${esc(e.what || "")}" />
      <div id="gf-similar" class="gf-similar" hidden></div>
@@ -460,7 +495,20 @@ function giftedSheet(existing = null) {
        <button class="btn" data-act="save">${existing ? "Save" : "Add It"}</button></div>`,
     (el) => {
       const $ = (q) => el.querySelector(q);
-      setTimeout(() => $("#gf-what").focus(), 50);
+      setTimeout(() => $(existing ? "#gf-what" : "#gf-link").focus(), 50);
+      const setCat = (v) => { cat = v; el.querySelectorAll('.seg[data-g="cat"] [data-v]').forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.v === v))); $("#gf-size-row").hidden = cat !== "clothes"; };
+      const fromLink = () => {
+        const v = $("#gf-link").value.trim(), msg = $("#gf-link-msg");
+        if (!v) { msg.hidden = true; return; }
+        const name = nameFromLink(v);
+        msg.hidden = false;
+        if (!name) { msg.textContent = "Couldn't read a name from that link. Just type it below."; return; }
+        $("#gf-what").value = name;
+        const c = catFromName(name); if (c) setCat(c);
+        msg.textContent = "Filled in from the link. Fix it up if you like. The link itself isn't saved.";
+        $("#gf-what").dispatchEvent(new Event("input"));
+      };
+      $("#gf-link").addEventListener("input", fromLink);
       el.querySelector('.seg[data-g="cat"]').addEventListener("click", (ev) => {
         const b = ev.target.closest("[data-v]"); if (!b) return;
         cat = b.dataset.v;
@@ -1243,7 +1291,7 @@ function photoChoicesHtml(r) {
   if (r.state !== "done") return "";
   if (!r.choices.length) {
     const why = r.webConfigured === false ? "No match in the brand's store, and web search isn't set up yet." : "No photos found.";
-    return `<p class="muted pf-msg">${why} <button class="link" data-m="manual">Add one yourself</button></p>`;
+    return `<p class="muted pf-msg">${why}${r.noManual ? "" : ` <button class="link" data-m="manual">Add one yourself</button>`}</p>`;
   }
   return `<div class="pf-choices" role="group" aria-label="Pick a photo">${r.choices.map((c, k) => `
     <button type="button" class="pf-choice" data-m="pick" data-k="${k}" aria-label="Use this photo${c.title ? `: ${esc(c.title)}` : ""}">
@@ -1262,8 +1310,8 @@ async function searchInto(r, kind, id, redraw) {
   }
   redraw();
 }
-function photoPickerSheet() {
-  const targets = photoTargets();
+function photoPickerSheet(only = null) {
+  const targets = only || photoTargets();
   const res = {}; // id → { state, choices, msg }
   const rowHtml = (t) => {
     const r = res[t.rec.id] || {};
@@ -1276,17 +1324,19 @@ function photoPickerSheet() {
   openSheet(
     `<h2>Find Photos</h2>
      <p class="muted">Searches each brand's own store first, then the web. Nothing is saved until you tap a photo.</p>
-     <button class="btn ghost small" data-m="next5">Search the next 5</button>
+     ${only ? "" : `<button class="btn ghost small" data-m="next5">Search the next 5</button>`}
      <div class="pf-list"></div>
      <div class="sheet-actions"><span class="spacer"></span><button class="btn ghost" data-act="cancel">Done</button></div>`,
     (el) => {
       const listEl = el.querySelector(".pf-list");
       let left = [...targets];
-      const draw = () => { listEl.innerHTML = left.length ? left.map(rowHtml).join("") : `<p class="muted">Every print and toy has a photo now.</p>`; el.querySelector('[data-m="next5"]').hidden = !left.some((t) => !res[t.rec.id]); };
+      const next5 = el.querySelector('[data-m="next5"]');
+      const draw = () => { listEl.innerHTML = left.length ? left.map(rowHtml).join("") : `<p class="muted">${only ? "Photo saved." : "Every print and toy has a photo now."}</p>`; if (next5) next5.hidden = !left.some((t) => !res[t.rec.id]); };
       const drawRow = (t) => { const n = listEl.querySelector(`.pf-row[data-id="${t.rec.id}"]`); if (n) n.outerHTML = rowHtml(t); };
       const find = (id) => left.find((t) => t.rec.id === id);
       draw();
-      el.querySelector('[data-m="next5"]').addEventListener("click", async (ev) => {
+      if (only) for (const t of only) { res[t.rec.id] = { noManual: t.kind === "gifted" }; searchInto(res[t.rec.id], t.kind, t.rec.id, () => drawRow(t)); }
+      next5?.addEventListener("click", async (ev) => {
         const btn = ev.currentTarget; btn.disabled = true;
         // One at a time: the server allows a few searches a minute.
         for (const t of left.filter((x) => !res[x.rec.id]).slice(0, 5)) { res[t.rec.id] = {}; await searchInto(res[t.rec.id], t.kind, t.rec.id, () => drawRow(t)); }
@@ -1295,8 +1345,9 @@ function photoPickerSheet() {
       listEl.addEventListener("click", async (ev) => {
         const b = ev.target.closest("[data-m]"); if (!b) return;
         const row = b.closest(".pf-row"), t = find(row?.dataset.id); if (!t) return;
-        if (b.dataset.m === "search") { res[t.rec.id] = {}; return searchInto(res[t.rec.id], t.kind, t.rec.id, () => drawRow(t)); }
+        if (b.dataset.m === "search") { res[t.rec.id] = { noManual: t.kind === "gifted" }; return searchInto(res[t.rec.id], t.kind, t.rec.id, () => drawRow(t)); }
         if (b.dataset.m === "manual") {
+          if (t.kind === "gifted") return;
           closeSheet(false);
           return itemSheet(t.kind === "prints" ? { dest: "closet", cat: "clothes", existing: t.rec } : { dest: "closet", cat: hasCat(t.rec), existing: t.rec });
         }
@@ -2411,6 +2462,7 @@ $app.addEventListener("click", (ev) => {
     case "notify": return notifySheet(id);
     case "guide": return guideSheet();
     case "add-gifted": return giftedSheet();
+    case "gifted-photo": { const g = S.data.gifted?.[id]; return owner() && g ? photoPickerSheet([{ kind: "gifted", rec: g, name: g.what }]) : undefined; }
     case "edit-gifted": return S.mine.has(id) && S.data.gifted?.[id] ? giftedSheet(S.data.gifted[id]) : undefined;
     case "remove-gifted": return act(`rg:${id}`, () => store.removeGifted(id), "Removed");
     case "delete-gifted": if (confirmTap(`dg:${id}`)) act(`dg:${id}`, () => store.deleteGifted(id), "Deleted"); return;

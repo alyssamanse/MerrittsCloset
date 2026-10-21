@@ -197,14 +197,14 @@ functions.http("api", async (req, res) => {
       limit("lookups", RATES.lookups);
       if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new ApiError(400, "Bad request");
       for (const k of Object.keys(payload)) if (k !== "kind" && k !== "id") throw new ApiError(400, `Unexpected field "${k}"`);
-      const kind = { prints: "prints", items: "items", toys: "toys" }[payload.kind];
+      const kind = { prints: "prints", items: "items", toys: "toys", gifted: "gifted" }[payload.kind];
       if (!kind || typeof payload.id !== "string" || !/^[A-Za-z0-9_-]{2,40}$/.test(payload.id)) throw new ApiError(400, "Bad request");
       const snap = await db.collection("wishlists").doc(ENV.wishlistId).get();
       if (!snap.exists) throw new ApiError(404, "This wishlist isn't set up yet.");
       const doc = snap.data();
       const rec = doc[kind]?.[payload.id];
       if (!rec) throw new ApiError(404, "That isn't in the list anymore.");
-      const name = kind === "prints" ? rec.printName : kind === "toys" ? rec.name : rec.printName || rec.title;
+      const name = kind === "prints" ? rec.printName : kind === "toys" ? rec.name : kind === "gifted" ? rec.what : rec.printName || rec.title;
       const brandRec = Object.values(doc.brands || {}).find((b) => brandKey(b.name) === brandKey(rec.brand));
       const r = await findPhotoChoices({ brand: rec.brand || "", name: name || "", url: rec.url || "", site: brandRec?.site || "" }, { key: process.env.BRAVE_API_KEY || "" });
       return res.json({
