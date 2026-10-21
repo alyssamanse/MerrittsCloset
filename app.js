@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1021-0948";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1021-0948";
-const BUILD = "1021-0948"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1021-1433";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1021-1433";
+const BUILD = "1021-1433"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = CONFIG.tabs || ["wishlist", "closet", "sizes"];
@@ -25,7 +25,21 @@ const adminEntry = new URLSearchParams(location.search).has("admin") || location
 
 let store;
 let S = { data: null, user: null, mine: new Set(), status: "loading" };
-let tab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "wishlist";
+// Opens on the Wishlist. Only the shared family link (#family) opens another page; a reload in the same
+// visit (e.g. a version update) stays where you were. The tab isn't kept in the address, so a home-screen
+// bookmark saved while on Sizes still opens on the Wishlist.
+const TAB_KEY = "closet:tab";
+let tab = (() => {
+  const h = location.hash.slice(1);
+  if (h === "family" && TABS.includes(h)) return h;
+  let t = ""; try { t = sessionStorage.getItem(TAB_KEY) || ""; } catch {}
+  return TABS.includes(t) ? t : "wishlist";
+})();
+if (TABS.includes(location.hash.slice(1))) history.replaceState(null, "", location.pathname + location.search);
+function rememberTab() {
+  try { sessionStorage.setItem(TAB_KEY, tab); } catch {}
+  if (location.hash) history.replaceState(null, "", location.pathname + location.search);
+}
 if (location.hash === "#admin") history.replaceState(null, "", location.pathname + location.search);
 const busy = new Set();            // keys of actions in flight; their buttons are disabled
 const armed = new Map();           // two-tap confirmations: key → timeout
@@ -2294,7 +2308,7 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
           await store.upsertDraft(item);
           await store.showItem(item.id);
         } else await store.upsertItem(item);
-        if (hide) { if (!isEdit || !hidden) { tab = "wishlist"; history.replaceState(null, "", `${location.search}#wishlist`); } return isEdit && hidden ? "Saved" : "Saved, hidden from guests"; }
+        if (hide) { if (!isEdit || !hidden) { tab = "wishlist"; rememberTab(); } return isEdit && hidden ? "Saved" : "Saved, hidden from guests"; }
         if (hidden) return "Now showing to guests";
       }
       if (!isEdit) {
@@ -2302,7 +2316,7 @@ function itemSheet({ dest = tab === "closet" ? "closet" : "wishlist", cat, exist
         // Land on a view that shows what was just added.
         if (dest === "closet") filter.closet = CAT_FILTER[cat];
         else if (filter.wishlist !== "all") filter.wishlist = CAT_FILTER[cat];
-        history.replaceState(null, "", `${location.search}#${tab}`);
+        rememberTab();
       }
       if (isEdit) return "Saved";
       return dest === "wishlist" ? "Added to the wishlist" : cat === "clothes" ? "Added to the closet" : "Added to what she has";
@@ -2475,13 +2489,13 @@ $app.addEventListener("click", (ev) => {
   }
   if (t.dataset.tab) {
     tab = t.dataset.tab;
-    history.replaceState(null, "", `${location.search}#${tab}`);
+    rememberTab();
     render();
     scrollToContent();
     return;
   }
   if (t.dataset.act === "go-tab") {
-    tab = t.dataset.to; history.replaceState(null, "", `${location.search}#${tab}`); render(); scrollToContent();
+    tab = t.dataset.to; rememberTab(); render(); scrollToContent();
     if (t.dataset.focus) document.getElementById(t.dataset.focus)?.focus();
     return;
   }

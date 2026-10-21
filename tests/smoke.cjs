@@ -36,6 +36,19 @@ const openSheet = async (p, sel, expectTitle) => {
 
   console.log("Guest");
   const g = await page(browser, "?demo");
+  await step("opens on the Wishlist, even from a link saved on another page", async () => {
+    const t = await page(browser, "?demo#sizes");
+    const sel = () => t.locator('.tab[aria-selected="true"]').getAttribute("data-tab");
+    must(await sel() === "wishlist", "didn't open on the Wishlist");
+    await t.click("[data-tab=sizes]"); await t.waitForTimeout(200);
+    must(!t.url().includes("#sizes"), "tab written into the address");
+    await t.reload(); await t.waitForSelector("main");
+    must(await sel() === "sizes", "a reload in the same visit should stay put");
+    await t.close();
+    const f = await page(browser, "?demo#family");
+    must(await f.locator("[data-to=family]").count() === 0 && (await f.locator("main").innerText()).length > 0, "family link broken");
+    await f.close();
+  });
   await step("guests never see hidden items", async () => {
     must(await g.locator(".wl-fold[data-wl=hidden]").count() === 0, "hidden section shown to a guest");
     must(!(await g.locator("main").innerText()).includes("Wooden Play Kitchen"), "hidden item visible to a guest");
