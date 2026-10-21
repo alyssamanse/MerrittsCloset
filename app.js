@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1020-2108";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1020-2108";
-const BUILD = "1020-2108"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1020-2119";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1020-2119";
+const BUILD = "1020-2119"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = CONFIG.tabs || ["wishlist", "closet", "sizes"];
@@ -436,12 +436,12 @@ function giftedRow(g) {
   const mine = S.mine.has(g.id);
   const cat = (GIFT_CATS.find(([k]) => k === g.cat) || [, "Other"])[1];
   const actions = g.fromList ? ""
-    : owner() ? `<span class="gifted-mine"><button class="link" data-act="gifted-photo" data-id="${g.id}">${g.image ? "Change Photo" : "Add Photo"}</button><button class="link danger" data-act="delete-gifted" data-id="${g.id}" ${dis(`dg:${g.id}`)}>${armedLabel(`dg:${g.id}`, "Delete", "Tap again")}</button></span>`
+    : owner() ? `<span class="gifted-mine"><button class="link" data-act="edit-gifted" data-id="${g.id}">Edit</button>${S.private?.giftLinks?.[g.id] ? `<button class="link" data-act="gifted-photo" data-id="${g.id}">${g.image ? "Change Photo" : "Add Photo"}</button>` : ""}<button class="link danger" data-act="delete-gifted" data-id="${g.id}" ${dis(`dg:${g.id}`)}>${armedLabel(`dg:${g.id}`, "Delete", "Tap again")}</button></span>`
     : mine ? `<span class="gifted-mine"><button class="link" data-act="edit-gifted" data-id="${g.id}">Edit</button><button class="link" data-act="remove-gifted" data-id="${g.id}" ${dis(`rg:${g.id}`)}>Remove</button></span>` : "";
   return `<li class="gifted-row${g.fromList ? " from-list" : ""}">
     ${g.image ? `<img class="gifted-img" src="${esc(g.image)}" alt="" referrerpolicy="no-referrer" loading="lazy" onerror="this.remove()">` : ""}
     <div class="gifted-main"><b>${esc(g.what)}</b>
-      <div class="chips"><span class="chip ink">${esc(cat)}</span>${g.size ? `<span class="chip">Size ${esc(g.size)}</span>` : ""}${g.fromList ? `<span class="chip">From the wishlist</span>` : ""}<span class="muted gifted-date">${g.fromList ? "Claimed" : "Added"} ${fmtShort(g.at)}</span></div>
+      <div class="chips"><span class="chip ink">${esc(cat)}</span>${g.size ? `<span class="chip">Size ${esc(g.size)}</span>` : ""}${g.fromList ? `<span class="chip">From the wishlist</span>` : ""}</div>
     </div>
     ${actions}
   </li>`;
@@ -479,7 +479,7 @@ function giftedSheet(existing = null) {
     `<h2>${existing ? "Edit Your Gift" : "I Already Got Something"}</h2>
      <p class="muted">${existing ? "Change what you added. Everyone visiting the list sees the update." : "So nobody else buys the same thing. Everyone visiting the list will see what you add (but not your name)."}</p>
      <label class="f" for="gf-link">Paste a link <span class="muted">(optional, fills in the name)</span></label>
-     <input class="in" id="gf-link" type="url" inputmode="url" placeholder="https://…" autocomplete="off" />
+     <input class="in" id="gf-link" type="url" inputmode="url" maxlength="600" placeholder="${existing && !owner() ? "Paste a new link to replace it" : "https://…"}" autocomplete="off" value="${esc(owner() ? S.private?.giftLinks?.[e.id] || "" : "")}" />
      <p class="muted nt-note" id="gf-link-msg" hidden></p>
      <label class="f" for="gf-what">What is it?</label>
      <input class="in" id="gf-what" maxlength="80" placeholder="Wooden train set" autocomplete="off" value="${esc(e.what || "")}" />
@@ -505,7 +505,7 @@ function giftedSheet(existing = null) {
         if (!name) { msg.textContent = "Couldn't read a name from that link. Just type it below."; return; }
         $("#gf-what").value = name;
         const c = catFromName(name); if (c) setCat(c);
-        msg.textContent = "Filled in from the link. Fix it up if you like. The link itself isn't saved.";
+        msg.textContent = `Filled in from the link. Fix it up if you like. Only ${CONFIG.ownerName || "the family"} sees the link.`;
         $("#gf-what").dispatchEvent(new Event("input"));
       };
       $("#gf-link").addEventListener("input", fromLink);
@@ -533,8 +533,10 @@ function giftedSheet(existing = null) {
         const what = $("#gf-what").value.trim();
         if (!what) throw new Error("Tell us what it is.");
         const item = { id: gid, what, cat, size: cat === "clothes" ? $("#gf-size").value : "" };
-        if (existing) { await store.editGifted(item); return "Saved"; }
-        await store.addGifted(item, $("#gf-from").value.trim());
+        const link = $("#gf-link").value.trim();
+        if (link && !/^https?:\/\/\S+\.\S+/i.test(link)) throw new Error("That link doesn't look right. Copy it from the store page, or leave it blank.");
+        if (existing) { await store.editGifted(item, owner() ? link : link || undefined); return "Saved"; }
+        await store.addGifted(item, $("#gf-from").value.trim(), link);
         return "Added. Thank you!";
       });
     }
@@ -2463,7 +2465,7 @@ $app.addEventListener("click", (ev) => {
     case "guide": return guideSheet();
     case "add-gifted": return giftedSheet();
     case "gifted-photo": { const g = S.data.gifted?.[id]; return owner() && g ? photoPickerSheet([{ kind: "gifted", rec: g, name: g.what }]) : undefined; }
-    case "edit-gifted": return S.mine.has(id) && S.data.gifted?.[id] ? giftedSheet(S.data.gifted[id]) : undefined;
+    case "edit-gifted": return (S.mine.has(id) || owner()) && S.data.gifted?.[id] ? giftedSheet(S.data.gifted[id]) : undefined;
     case "remove-gifted": return act(`rg:${id}`, () => store.removeGifted(id), "Removed");
     case "delete-gifted": if (confirmTap(`dg:${id}`)) act(`dg:${id}`, () => store.deleteGifted(id), "Deleted"); return;
     case "clear-gifted": if (confirmTap("clear-gifted")) act("clear-gifted", () => store.clearGifted(), "Cleared. Ready for next time"); return;

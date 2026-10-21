@@ -206,7 +206,14 @@ functions.http("api", async (req, res) => {
       if (!rec) throw new ApiError(404, "That isn't in the list anymore.");
       const name = kind === "prints" ? rec.printName : kind === "toys" ? rec.name : kind === "gifted" ? rec.what : rec.printName || rec.title;
       const brandRec = Object.values(doc.brands || {}).find((b) => brandKey(b.name) === brandKey(rec.brand));
-      const r = await findPhotoChoices({ brand: rec.brand || "", name: name || "", url: rec.url || "", site: brandRec?.site || "" }, { key: process.env.BRAVE_API_KEY || "" });
+      let link = rec.url || "";
+      if (kind === "gifted") {
+        // A guest's link lives only in the owner-only private doc. No link, no lookup.
+        const ps = await db.collection("wishlists").doc(ENV.wishlistId).collection("private").doc("owner").get();
+        link = (ps.exists && ps.data().giftLinks?.[payload.id]) || "";
+        if (!link) throw new ApiError(400, "This one has no link to pull a photo from.");
+      }
+      const r = await findPhotoChoices({ brand: rec.brand || "", name: name || "", url: link, site: brandRec?.site || "" }, { key: process.env.BRAVE_API_KEY || "" });
       return res.json({
         ok: true,
         choices: r.choices.map((c) => ({ image: trim(c.image, 600), url: trim(c.url, 600), title: trim(c.title, 120), source: c.source })),
@@ -274,11 +281,11 @@ functions.http("api", async (req, res) => {
         if (changed) tx.set(privRef, next);
         return next;
       }, { maxAttempts: 3 });
-      return res.json({ ok: true, private: priv || { givers: {}, thanks: {}, drafts: {} } });
+      return res.json({ ok: true, private: priv || { givers: {}, thanks: {}, drafts: {}, giftLinks: {} } });
     }
 
     if (action === "subscribe") limit(`subscribe:${clientIp(req)}`, RATES.subscribePerIp);
-    if (action === "addGifted" || action === "editGifted") limit(`gifted:${clientIp(req)}`, RATES.giftedPerIp);
+    if (action === "addGifted") limit(`gifted:${clientIp(req)}`, RATES.giftedPerIp); // edits can't add entries; the overall guest-writes limit covers them
     if (GUEST_ACTIONS.has(action)) limit("guest-writes", RATES.guestWrites);
     else if (OWNER_ACTIONS.has(action)) {
       if (!owner) throw new ApiError(403, "Only the owner can do that.");
@@ -288,7 +295,7 @@ functions.http("api", async (req, res) => {
     // The wishlist id comes from server config, never from the request,
     // so a caller cannot point this at any other document.
     // Only actions that can touch gifter names read the private doc.
-    const touchesPrivate = ["claim", "unclaim", "resetClaim", "deleteItem", "receive", "deleteFamilyItem", "hideItem", "showItem", "subscribe", "addGifted", "editGifted", "removeGifted", "deleteGifted"].includes(action);
+    const touchesPrivate = ["claim", "unclaim", "resetClaim", "deleteItem", "receive", "deleteFamilyItem", "hideItem", "showItem", "subscribe", "addGifted", "editGifted", "removeGifted", "deleteGifted", "clearGifted"].includes(action);
     const out = await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const ps = touchesPrivate ? await tx.get(privRef) : null;

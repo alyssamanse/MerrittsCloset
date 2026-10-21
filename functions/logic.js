@@ -265,10 +265,11 @@ function reduce(prev, action, payload, { isOwner, now, priv = null }) {
     }
 
     case "addGifted": {
-      onlyKeys(p, ["item", "key", "from"], "payload");
+      onlyKeys(p, ["item", "key", "from", "link"], "payload");
       if (!ENABLE_GIFTED()) throw new ApiError(404, "This list doesn't take those.");
       if (typeof p.key !== "string" || !KEY_RE.test(p.key)) bad("Invalid key");
       str(p.from, "Name", 40);                                             // optional; only the owners' private record keeps it
+      url(p.link, "Link");                                                 // optional; kept only in the owners' private record
       const g = cleanGifted(p.item);
       if (state.gifted[g.id]) return same;                                 // a retry of the same entry
       if (Object.keys(state.gifted).length >= LIMITS.gifted) bad("This list is full. Ask the family to clear old entries.");
@@ -279,13 +280,14 @@ function reduce(prev, action, payload, { isOwner, now, priv = null }) {
       break;
     }
     case "editGifted": {
-      // The guest who added an entry can fix it (what it is, category, size). Same device key as adding.
-      onlyKeys(p, ["item", "key"], "payload");
-      if (typeof p.key !== "string" || !KEY_RE.test(p.key)) bad("Invalid key");
+      // The guest who added an entry (same device key) or an owner can fix it. A link goes to the private record only.
+      onlyKeys(p, ["item", "key", "link"], "payload");
+      if (!isOwner && (typeof p.key !== "string" || !KEY_RE.test(p.key))) bad("Invalid key");
+      url(p.link, "Link");
       const g = cleanGifted(p.item);
       const cur = state.gifted[g.id];
       if (!cur) throw new ApiError(404, "That entry isn't on the list anymore.");
-      if (cur.h !== claimHash(p.key, g.id)) throw new ApiError(403, "Only the person who added it can change it.");
+      if (!isOwner && cur.h !== claimHash(p.key, g.id)) throw new ApiError(403, "Only the person who added it can change it.");
       const next = { ...cur, what: g.what, cat: g.cat, size: g.size };
       if (JSON.stringify(next) === JSON.stringify(cur)) return same;
       state.gifted[g.id] = next;
@@ -809,10 +811,10 @@ const MAX_OBSESSIONS = 30;
 const ENABLE_GIFTED = () => process.env.GUEST_GIFTED === "true"; // Luca's server only
 const MAX_ALERTS_PER_ITEM = 25, MAX_ALERTS_TOTAL = 300;
 const MAX_THANKS = 200;
-const emptyPrivate = () => ({ givers: {}, thanks: {}, drafts: {}, alerts: {} });
+const emptyPrivate = () => ({ givers: {}, thanks: {}, drafts: {}, alerts: {}, giftLinks: {} });
 function reducePrivate(prevPriv, action, payload, { prevPublic, nextPublic, publicChanged, isOwner, now, newId }) {
   const priv = structuredClone(prevPriv || emptyPrivate());
-  priv.givers = priv.givers || {}; priv.thanks = priv.thanks || {}; priv.drafts = priv.drafts || {}; priv.alerts = priv.alerts || {};
+  priv.givers = priv.givers || {}; priv.thanks = priv.thanks || {}; priv.drafts = priv.drafts || {}; priv.alerts = priv.alerts || {}; priv.giftLinks = priv.giftLinks || {};
   const p = payload || {};
   const before = JSON.stringify(priv);
   const addThank = (title, from, itemId = "") => {
@@ -857,11 +859,19 @@ function reducePrivate(prevPriv, action, payload, { prevPublic, nextPublic, publ
   } else if (publicChanged && action === "addGifted") {
     const from = str(p.from, "Name", 40);
     if (from) addThank(p.item.what, from, p.item.id);
-  } else if (publicChanged && action === "editGifted") {
-    // Keep a not-yet-written thank-you in step with the new description.
-    for (const t of Object.values(priv.thanks)) if (t.itemId === p.item.id && !t.done) t.title = String(p.item.what || "").slice(0, 120);
+    const link = url(p.link, "Link");
+    if (link) priv.giftLinks[p.item.id] = link;
+  } else if (action === "editGifted") {
+    // reduce() already checked this is the guest's own entry (or an owner). Runs even when only the link changed.
+    if (publicChanged) for (const t of Object.values(priv.thanks)) if (t.itemId === p.item.id && !t.done) t.title = String(p.item.what || "").slice(0, 120);
+    const link = url(p.link, "Link");
+    if (link) priv.giftLinks[p.item.id] = link;
+    else if (isOwner && p.link === "") delete priv.giftLinks[p.item.id]; // a guest's blank box means "no change" (they can't see the saved link)
   } else if (publicChanged && (action === "removeGifted" || action === "deleteGifted")) {
     for (const [tid, t] of Object.entries(priv.thanks)) if (t.itemId === p.id && !t.done) delete priv.thanks[tid];
+    delete priv.giftLinks[p.id];
+  } else if (publicChanged && action === "clearGifted") {
+    priv.giftLinks = {};
   } else if (publicChanged) {
     const iid = p.itemId || p.id;
     // The item left the public list (deleted, received, hidden): drop its waiting list, no email.

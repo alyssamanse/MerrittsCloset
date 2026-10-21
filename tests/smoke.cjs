@@ -279,6 +279,9 @@ const openSheet = async (p, sel, expectTitle) => {
     await lo.locator("[data-act=signin]").first().click(); await lo.waitForTimeout(500);
     for (let k = 0; k < 8 && await lo.locator(".guide").count(); k++) await lo.click('.guide [data-m="next"]');
     if (!(await lo.locator(".gifted-row").first().isVisible().catch(() => false))) { await lo.click("[data-tab=gifted]"); await lo.waitForTimeout(250); }
+    must(await lo.locator(".gifted-row", { hasText: "Wooden train set" }).locator("[data-act=gifted-photo]").count() === 0, "Add Photo shown without a link");
+    must(await lo.locator(".gifted-row", { hasText: "Wooden train set" }).locator("[data-act=edit-gifted]").count() === 1, "owner can't edit");
+    must(!(await lo.locator("#gifted-results").innerText()).includes("Added "), "added date still shown");
     await lo.locator(".gifted-row", { hasText: "Dinosaur pajamas" }).locator("[data-act=gifted-photo]").click(); await lo.waitForTimeout(800);
     await lo.locator(".pf-choice").first().click(); await lo.waitForTimeout(600);
     await lo.click('.sheet-bg [data-act="cancel"]'); await lo.waitForTimeout(250);

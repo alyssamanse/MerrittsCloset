@@ -93,3 +93,4 @@ test("owner can add a photo to an Under the Tree entry; guests can't, and a gues
   await call("editGifted", { item: gift("gift_photo001", { what: "Renamed" }), key: k });
   assert.equal(store.docs[MAIN].gifted.gift_photo001.image, "https://cdn.example.com/a.jpg");
 });
+
