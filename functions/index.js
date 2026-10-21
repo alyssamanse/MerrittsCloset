@@ -278,6 +278,7 @@ functions.http("api", async (req, res) => {
     }
 
     if (action === "subscribe") limit(`subscribe:${clientIp(req)}`, RATES.subscribePerIp);
+    if (action === "addGifted") limit(`gifted:${clientIp(req)}`, RATES.giftedPerIp);
     if (GUEST_ACTIONS.has(action)) limit("guest-writes", RATES.guestWrites);
     else if (OWNER_ACTIONS.has(action)) {
       if (!owner) throw new ApiError(403, "Only the owner can do that.");
@@ -287,7 +288,7 @@ functions.http("api", async (req, res) => {
     // The wishlist id comes from server config, never from the request,
     // so a caller cannot point this at any other document.
     // Only actions that can touch gifter names read the private doc.
-    const touchesPrivate = ["claim", "unclaim", "resetClaim", "deleteItem", "receive", "deleteFamilyItem", "hideItem", "showItem", "subscribe"].includes(action);
+    const touchesPrivate = ["claim", "unclaim", "resetClaim", "deleteItem", "receive", "deleteFamilyItem", "hideItem", "showItem", "subscribe", "addGifted", "removeGifted", "deleteGifted"].includes(action);
     const out = await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const ps = touchesPrivate ? await tx.get(privRef) : null;

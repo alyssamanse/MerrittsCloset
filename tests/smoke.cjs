@@ -222,19 +222,45 @@ const openSheet = async (p, sel, expectTitle) => {
   const l = await page(browser, "luca/?demo");
   await step("Luca's page: own name, wishlist only, his wording", async () => {
     must((await l.title()) === "Luca's Wishlist", `title was ${await l.title()}`);
-    must(await l.locator("nav.tabs").count() === 0, "tab bar shown");
+    must((await l.locator("nav.tabs .tab").allTextContents()).join("|").match(/^Wishlist\|(Under the Tree|Already Got)$/), "tabs should be Wishlist + Under the Tree");
     must(await l.locator("[data-to=family]").count() === 0, "family link shown");
     must((await l.locator("h1.logo").innerText()).toLowerCase().includes("luca"), "logo isn't Luca's");
+    must((await l.locator(".nav-mark").innerText()).trim() === "L", "tab-bar monogram isn't L");
     must(await l.locator(".chip.top").count() === 0, "closet badges on a wishlist-only site");
     must((await l.locator("footer").innerText()).includes("Sign in to edit"), "no sign-in link for the owner");
     must(await l.locator(".guide").count() === 0, "a guest got the owner tutorial");
+  });
+  await step("Under the Tree: guest searches, adds, sees duplicate warning, removes own", async () => {
+    await l.click("[data-tab=gifted]"); await l.waitForTimeout(200);
+    must(await l.locator(".gifted-row").count() === 2, "sample entries missing");
+    await l.fill("#gifted-search", "dinosaur"); await l.waitForTimeout(100);
+    must(await l.locator(".gifted-row").count() === 1, "search didn't filter");
+    await l.fill("#gifted-search", "rocket ship"); await l.waitForTimeout(100);
+    must((await l.locator("#gifted-results").innerText()).includes("looks safe to buy"), "no 'safe to buy' message");
+    await l.fill("#gifted-search", "");
+    await l.click("[data-act=add-gifted]"); await l.waitForTimeout(200);
+    await l.fill("#gf-what", "Wooden train set with bridge"); await l.waitForTimeout(100);
+    must((await l.locator("#gf-similar").innerText()).includes("Someone already added"), "no duplicate warning");
+    await l.fill("#gf-what", "Toddler rain boots"); await l.click('.seg[data-g="cat"] [data-v="clothes"]');
+    must(await l.locator("#gf-size-row").isVisible(), "no size for clothes");
+    await l.fill("#gf-url", "not a link"); await l.click('.sheet-bg [data-act="save"]'); await l.waitForTimeout(200);
+    must((await l.locator(".sheet-err").innerText()).includes("link"), "bad link accepted");
+    await l.fill("#gf-url", "https://example.com/boots"); await l.fill("#gf-from", "Aunt Jen");
+    await l.click('.sheet-bg [data-act="save"]'); await l.waitForTimeout(600);
+    const row = l.locator(".gifted-row", { hasText: "Toddler rain boots" });
+    must(await row.count() === 1, "entry not shown");
+    must(!(await l.locator("main").innerText()).includes("Aunt Jen"), "name shown to guests");
+    must(await row.locator("[data-act=remove-gifted]").count() === 1, "can't remove own entry");
+    must(await l.locator(".gifted-row", { hasText: "Wooden train set" }).locator("[data-act=remove-gifted]").count() === 0, "can remove someone else's");
+    await row.locator("[data-act=remove-gifted]").click(); await l.waitForTimeout(500);
+    must(await l.locator(".gifted-row", { hasText: "Toddler rain boots" }).count() === 0, "not removed");
   });
   await step("Luca's page: owner adds the example gifts in one tap", async () => {
     const lo = await page(browser, "luca/?demo&admin");
     const s = lo.locator("[data-act=signin]"); if (await s.count()) { await s.first().click(); await lo.waitForTimeout(400); }
     // First sign-in: the tutorial opens by itself; walk through it.
     await lo.waitForSelector(".guide", { timeout: 5000 });
-    for (let k = 0; k < 5; k++) await lo.click('.guide [data-m="next"]');
+    for (let k = 0; k < 8 && await lo.locator(".guide").count(); k++) await lo.click('.guide [data-m="next"]');
     must(await lo.locator(".guide").count() === 0, "guide didn't close");
     must(await lo.locator(".owner-bar [data-act=add]").count() === 1, "no big Add button");
     // simple form: extra fields folded away until "More details"

@@ -4,7 +4,7 @@
 const crypto = require("crypto");
 
 const LIMITS = {
-  items: 150, prints: 400, brands: 40, toys: 200, family: 150, styleFavs: 60, // hard caps on stored records
+  items: 150, prints: 400, brands: 40, toys: 200, family: 150, styleFavs: 60, gifted: 100, // hard caps on stored records
   trashMs: 7 * 86400000,                // bulk-deleted prints can be restored for a week
   docBytes: 800_000,                     // Firestore's own limit is ~1 MiB
   activeClaimsPerKey: 15,                // one browser can't claim the whole list
@@ -152,6 +152,20 @@ function cleanEmail(v) {
   if (!/^[^\s@<>"',;()]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(e)) bad("That email address doesn't look right.");
   return e;
 }
+// "Already Under the Tree": something a guest already bought, so nobody doubles up.
+// Text only plus an optional store link (never fetched, never shown as an image).
+const GIFTED_CATS = ["toy", "clothes", "book", "other"];
+function cleanGifted(g) {
+  onlyKeys(g, ["id", "what", "cat", "size", "url"], "gift");
+  const cat = g.cat ?? "toy";
+  if (!GIFTED_CATS.includes(cat)) bad("Pick toy, clothes, book or other");
+  const link = url(g.url, "Link");
+  if (link) {
+    const h = new URL(link).hostname.toLowerCase();
+    if (h === "localhost" || /^(\d+\.){3}\d+$/.test(h) || h.includes(":") || !h.includes(".")) bad("That link doesn't look like a store page");
+  }
+  return { id: id(g.id), what: str(g.what, "What it is", 80, { required: true }), cat, size: cat === "clothes" ? str(g.size, "Size", 20) : "", url: link };
+}
 function cleanStyleFav(f) {
   onlyKeys(f, STYLE_FAV_FIELDS, "style");
   return { id: id(f.id), brand: str(f.brand, "Brand", 60), name: str(f.name, "Style name", 80, { required: true }), url: url(f.url, "Link"), image: url(f.image, "Image") };
@@ -201,8 +215,8 @@ const brandKey = (name) => {
 // (state | null, action, payload, { isOwner, now }) → { state, changed }
 // Every action changes at most one document. Repeating an action is a no-op
 // (changed: false → no write), which makes client retries safe.
-const GUEST_ACTIONS = new Set(["claim", "unclaim", "subscribe"]);
-const OWNER_ACTIONS = new Set(["init", "setVisibility", "upsertBrand", "deleteBrand", "upsertItem", "deleteItem", "receive", "upsertPrint", "deletePrint", "upsertToy", "deleteToy", "setFavoriteStyles", "addType", "renameType", "deleteType", "resetClaim", "importBatch", "setColors", "setImages", "setPlan", "deletePlan", "setStock", "upsertFamilyItem", "deleteFamilyItem", "upsertStyleFav", "deleteStyleFav", "bulkCloset", "undoBulkDelete", "confirmSizes", "hideItem", "showItem", "setObsessions", "setPhoto"]);
+const GUEST_ACTIONS = new Set(["claim", "unclaim", "subscribe", "addGifted", "removeGifted"]);
+const OWNER_ACTIONS = new Set(["init", "setVisibility", "upsertBrand", "deleteBrand", "upsertItem", "deleteItem", "receive", "upsertPrint", "deletePrint", "upsertToy", "deleteToy", "setFavoriteStyles", "addType", "renameType", "deleteType", "resetClaim", "importBatch", "setColors", "setImages", "setPlan", "deletePlan", "setStock", "upsertFamilyItem", "deleteFamilyItem", "upsertStyleFav", "deleteStyleFav", "bulkCloset", "undoBulkDelete", "confirmSizes", "hideItem", "showItem", "setObsessions", "setPhoto", "deleteGifted", "clearGifted"]);
 
 function reduce(prev, action, payload, { isOwner, now, priv = null }) {
   if (!GUEST_ACTIONS.has(action) && !OWNER_ACTIONS.has(action)) bad("Unknown action");
@@ -212,7 +226,7 @@ function reduce(prev, action, payload, { isOwner, now, priv = null }) {
     return { state: emptyState(), changed: true };
   }
   const state = structuredClone(prev);
-  for (const k of ["brands", "items", "prints", "toys", "claims", "family", "styleFavs"]) state[k] = state[k] || {};
+  for (const k of ["brands", "items", "prints", "toys", "claims", "family", "styleFavs", "gifted"]) state[k] = state[k] || {};
   if (state.trash && now - (state.trash.at || 0) > LIMITS.trashMs) delete state.trash;
   for (const b of Object.values(state.brands)) if (!b.sizeAt) b.sizeAt = now;
   const p = payload || {};
@@ -253,6 +267,43 @@ function reduce(prev, action, payload, { isOwner, now, priv = null }) {
         if (now - cur.at < LIMITS.claimCooldownMs) throw new ApiError(429, "Slow down a moment and try again.", 3);
         state.claims[itemId] = { h: null, at: now };
       }
+      break;
+    }
+
+    case "addGifted": {
+      onlyKeys(p, ["item", "key", "from"], "payload");
+      if (!ENABLE_GIFTED()) throw new ApiError(404, "This list doesn't take those.");
+      if (typeof p.key !== "string" || !KEY_RE.test(p.key)) bad("Invalid key");
+      str(p.from, "Name", 40);                                             // optional; only the owners' private record keeps it
+      const g = cleanGifted(p.item);
+      if (state.gifted[g.id]) return same;                                 // a retry of the same entry
+      if (Object.keys(state.gifted).length >= LIMITS.gifted) bad("This list is full. Ask the family to clear old entries.");
+      const h = claimHash(p.key, g.id);
+      const mineCount = Object.entries(state.gifted).filter(([gid, x]) => x.h === claimHash(p.key, gid)).length;
+      if (mineCount >= LIMITS.activeClaimsPerKey) throw new ApiError(429, "That's a lot of gifts! Remove one first.", 60);
+      state.gifted[g.id] = { ...g, h, at: now };
+      break;
+    }
+    case "removeGifted": {
+      onlyKeys(p, ["id", "key"], "payload");
+      const gid = id(p.id);
+      if (typeof p.key !== "string" || !KEY_RE.test(p.key)) bad("Invalid key");
+      const cur = state.gifted[gid];
+      if (!cur) return same;
+      if (cur.h !== claimHash(p.key, gid)) throw new ApiError(403, "Only the person who added it can remove it.");
+      delete state.gifted[gid];
+      break;
+    }
+    case "deleteGifted": {
+      onlyKeys(p, ["id"], "payload");
+      if (!state.gifted[id(p.id)]) return same;
+      delete state.gifted[p.id];
+      break;
+    }
+    case "clearGifted": {
+      onlyKeys(p, [], "payload");
+      if (!Object.keys(state.gifted).length) return same;
+      state.gifted = {};
       break;
     }
 
@@ -715,7 +766,7 @@ function reduce(prev, action, payload, { isOwner, now, priv = null }) {
 }
 
 // What readers get back from the API. Matches what the Firestore document holds.
-const publicView = (s) => s && { v: s.v, visibility: s.visibility, brands: s.brands, items: s.items, prints: s.prints, toys: s.toys || {}, claims: s.claims, favoriteStyles: s.favoriteStyles || [], typeLists: s.typeLists || {}, ...(s.colors && { colors: s.colors }), plans: s.plans || [], family: s.family || {}, styleFavs: s.styleFavs || {}, ...(s.obsessions && { obsessions: s.obsessions }), ...(s.trash && { trash: { kind: s.trash.kind, at: s.trash.at, count: Object.keys(s.trash.records || {}).length } }) };
+const publicView = (s) => s && { v: s.v, visibility: s.visibility, brands: s.brands, items: s.items, prints: s.prints, toys: s.toys || {}, claims: s.claims, favoriteStyles: s.favoriteStyles || [], typeLists: s.typeLists || {}, ...(s.colors && { colors: s.colors }), plans: s.plans || [], family: s.family || {}, styleFavs: s.styleFavs || {}, ...(s.gifted && Object.keys(s.gifted).length && { gifted: s.gifted }), ...(s.obsessions && { obsessions: s.obsessions }), ...(s.trash && { trash: { kind: s.trash.kind, at: s.trash.at, count: Object.keys(s.trash.records || {}).length } }) };
 
 // ── rate limiting (in memory) ───────────────────────────────────────
 // Token buckets. The function runs with max instances = 1, so one process
@@ -743,6 +794,7 @@ class Limiter {
 const PRIVATE_ACTIONS = new Set(["getPrivate", "setThank", "deleteThank", "addThank", "upsertDraft", "deleteDraft"]);
 const MAX_DRAFTS = 50;
 const MAX_OBSESSIONS = 30;
+const ENABLE_GIFTED = () => process.env.GUEST_GIFTED === "true"; // Luca's server only
 const MAX_ALERTS_PER_ITEM = 25, MAX_ALERTS_TOTAL = 300;
 const MAX_THANKS = 200;
 const emptyPrivate = () => ({ givers: {}, thanks: {}, drafts: {}, alerts: {} });
@@ -790,6 +842,11 @@ function reducePrivate(prevPriv, action, payload, { prevPublic, nextPublic, publ
       if (total >= MAX_ALERTS_TOTAL) bad("Alerts are full right now. Please check back later.");
       priv.alerts[iid] = [...list, { e: email, at: now }];
     }
+  } else if (publicChanged && action === "addGifted") {
+    const from = str(p.from, "Name", 40);
+    if (from) addThank(p.item.what, from, p.item.id);
+  } else if (publicChanged && (action === "removeGifted" || action === "deleteGifted")) {
+    for (const [tid, t] of Object.entries(priv.thanks)) if (t.itemId === p.id && !t.done) delete priv.thanks[tid];
   } else if (publicChanged) {
     const iid = p.itemId || p.id;
     // The item left the public list (deleted, received, hidden): drop its waiting list, no email.
@@ -826,6 +883,7 @@ const RATES = {
   imports: 20,
   lookups: 8,         // Find photos / Check stock calls (each reads up to 10 store pages)
   subscribePerIp: 5,  // "Notify me" sign-ups from one address
+  giftedPerIp: 4,     // "Already Under the Tree" entries from one address
 };
 
 module.exports = { cleanEmail, sizeForStyle, reducePrivate, PRIVATE_ACTIONS, emptyPrivate, brandKey, MAX_STOCK_RESULTS, DEFAULT_TYPES, reduce, publicView, Limiter, RATES, LIMITS, ApiError, claimHash, GUEST_ACTIONS, OWNER_ACTIONS };

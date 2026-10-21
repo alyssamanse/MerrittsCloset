@@ -1,13 +1,15 @@
-import { CONFIG } from "./config.js?v=1020-1553";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1020-1553";
-const BUILD = "1020-1553"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1020-2045";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1020-2045";
+const BUILD = "1020-2045"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = CONFIG.tabs || ["wishlist", "closet", "sizes"];
 const HAS_CLOSET = MAIN_TABS.includes("closet");
 const PR = { her: "her", she: "she", ...(CONFIG.pronoun || {}) }; // "his"/"he" on a boy's list
 const TABS = [...MAIN_TABS, ...((CONFIG.family || []).length ? ["family"] : [])]; // "family" is reached from the footer link, not the tab bar
-const TAB_LABEL = { wishlist: "Wishlist", closet: "Closet", sizes: "Sizes" };
+// "Already Under the Tree" from October through December, "Already Got It" from January 1.
+const giftedName = (d = new Date()) => (d.getMonth() >= 9 ? { tab: "Under the Tree", title: "Already Under the Tree" } : { tab: "Already Got", title: "Already Got It" });
+const TAB_LABEL = { wishlist: "Wishlist", closet: "Closet", sizes: "Sizes", get gifted() { return giftedName().tab; } };
 const OTHER_TYPES = ["Blanket", "Swaddle", "Lovey", "Bedding", "Bath", "Feeding", "Books", "Room decor", "Gear", "Keepsake"];
 const TOY_TYPES = ["Rattle", "Teether", "Stacker", "Blocks", "Book", "Plush", "Bath", "Music", "Activity", "Push & ride", "Puzzle", "Pretend play", "Outdoor"];
 const TYPES = ["Zippy", "Shorty", "Footie", "Romper", "Bodysuit", "Two-piece PJs", "Two-piece daywear", "Pajamas", "Dress", "Bubble", "Swim", "Outerwear", "Separates", "Swaddle", "Sleep bag", "Blanket", "Bib", "Hat", "Bow", "Shoes", "Accessory"];
@@ -52,6 +54,7 @@ const CAT_FILTER = { clothes: "clothes", toy: "toys", other: "other" };
 const filter = { wishlist: "all", closet: "clothes", fit: "all", plan: "", person: "all" };
 let familyQuery = ""; // view-only, no requests
 let closetQuery = ""; // closet search; filters what's already loaded, never makes a request
+let giftedQuery = ""; // "Already Under the Tree" search
 const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[’']/g, "");
 const matches = (q, ...fields) => {
   const hay = fold(fields.flat().join(" "));
@@ -149,7 +152,7 @@ function safeBody() {
 }
 function render() {
   if (document.querySelector(".sheet-bg")) return; // don't wipe a form being filled in
-  const searchId = ["closet-search", "family-search"].find((x) => document.activeElement?.id === x);
+  const searchId = ["closet-search", "family-search", "gifted-search"].find((x) => document.activeElement?.id === x);
   const searching = !!searchId;
   const caret = searching ? document.activeElement.selectionStart : null;
   queueMicrotask(() => {
@@ -165,7 +168,7 @@ function render() {
       <p>${esc(CONFIG.tagline || "Her wishes, her favorites, and what she already has")}</p>
     </header>
     ${MAIN_TABS.length > 1 ? `<nav class="tabs" role="tablist">
-      <button class="nav-mark" data-act="to-top" aria-label="${name}'s Closet, back to top" tabindex="-1"><i>M</i></button>
+      <button class="nav-mark" data-act="to-top" aria-label="${name}'s ${esc(CONFIG.logoSub || "Closet")}, back to top" tabindex="-1"><i>${esc(CONFIG.monogram || CONFIG.babyName[0])}</i></button>
       ${MAIN_TABS.map((t) => `<button class="tab" role="tab" aria-selected="${tab === t}" data-tab="${t}">${TAB_LABEL[t]}</button>`).join("")}
     </nav>` : `<div class="tabs-spacer"></div>`}
     <main>${adminPanel()}${safeBody()}</main>
@@ -203,7 +206,7 @@ function body() {
     : `<div class="empty">This list isn't available right now.</div>`;
   if (S.status === "unavailable") return `<div class="empty">This list isn't available right now.</div>`;
   if (S.status === "empty") return `<div class="empty">${owner() ? "Setting up your list…" : "This list isn't available right now."}</div>`;
-  return tab === "family" ? familyView() : tab === "wishlist" ? wishlistView() : tab === "closet" ? closetView() : sizesView();
+  return tab === "family" ? familyView() : tab === "wishlist" ? wishlistView() : tab === "gifted" ? giftedView() : tab === "closet" ? closetView() : sizesView();
 }
 
 const filterChips = (which, options) => `
@@ -396,6 +399,104 @@ async function addStarters() {
   } finally { busy.delete("starters"); starterProgress = ""; render(); }
 }
 
+// ── "Already Under the Tree" (guests note gifts they already bought) ───────────────
+const GIFT_CATS = [["toy", "Toy"], ["clothes", "Clothes"], ["book", "Book"], ["other", "Other"]];
+const hostOf2 = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
+const fmtShort = (t) => new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+function giftedView() {
+  const all = list(S.data.gifted);
+  const n = giftedName();
+  return `
+    <div class="note">Bought ${esc(CONFIG.babyName)} something that isn't on the wishlist? Add it here so nobody doubles up. Thinking of buying something? Search first.</div>
+    ${owner() && CONFIG.guide ? `<div class="owner-bar"><button class="link" data-act="guide">How This Works</button></div>` : ""}
+    <div class="section-title"><h2>${esc(n.title)}</h2><span class="muted">${all.length} ${all.length === 1 ? "gift" : "gifts"}</span></div>
+    <button class="btn gifted-add" data-act="add-gifted">I Already Got Something</button>
+    <div class="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+      <input type="search" id="gifted-search" class="in" value="${esc(giftedQuery)}" placeholder="Already have a dinosaur? Search" aria-label="Search gifts already bought" autocomplete="off" enterkeyhint="search" />
+    </div>
+    <div id="gifted-results">${giftedResults()}</div>
+    ${owner() && all.length ? `<div class="gifted-owner"><button class="link danger" data-act="clear-gifted" ${dis("clear-gifted")}>${armedLabel("clear-gifted", "Start Fresh", "Tap again to clear the whole list")}</button></div>` : ""}`;
+}
+function giftedResults() {
+  const q = giftedQuery.trim();
+  const all = list(S.data.gifted).sort((a, b) => (b.at || 0) - (a.at || 0));
+  const shown = q ? all.filter((g) => matches(q, g.what, g.cat, g.size)) : all;
+  if (!all.length) return `<div class="empty">Nothing yet. Be the first to add something you bought!</div>`;
+  if (!shown.length) return `<div class="empty">Nobody's added “${esc(q)}” yet, so it looks safe to buy.</div>`;
+  return `<ul class="gifted-list">${shown.map(giftedRow).join("")}</ul>`;
+}
+function giftedRow(g) {
+  const link = safeUrl(g.url) && !String(g.url).startsWith("data:") ? g.url : "";
+  const mine = S.mine.has(g.id);
+  const cat = (GIFT_CATS.find(([k]) => k === g.cat) || [, "Other"])[1];
+  return `<li class="gifted-row">
+    <div class="gifted-main"><b>${esc(g.what)}</b>
+      <div class="chips"><span class="chip ink">${esc(cat)}</span>${g.size ? `<span class="chip">Size ${esc(g.size)}</span>` : ""}<span class="muted gifted-date">Added ${fmtShort(g.at)}</span></div>
+      ${link ? `<a class="link gifted-link" href="${esc(link)}" target="_blank" rel="noopener noreferrer nofollow ugc">${esc(hostOf2(link))} ↗</a>` : ""}
+    </div>
+    ${owner() ? `<button class="link danger" data-act="delete-gifted" data-id="${g.id}" ${dis(`dg:${g.id}`)}>${armedLabel(`dg:${g.id}`, "Delete", "Tap again")}</button>`
+      : mine ? `<button class="link" data-act="remove-gifted" data-id="${g.id}" ${dis(`rg:${g.id}`)}>Remove</button>` : ""}
+  </li>`;
+}
+// Words worth comparing ("wooden train set" vs "train set by Brio").
+const keyWords = (t) => fold(String(t || "")).split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !["the", "and", "set", "for", "with", "toy", "kids", "baby"].includes(w));
+const looksSame = (a, b) => { const A = new Set(keyWords(a)), B = keyWords(b); if (!A.size || !B.length) return false; const hit = B.filter((w) => A.has(w)).length; return hit >= Math.min(2, A.size, B.length); };
+function giftedSheet() {
+  let cat = "toy";
+  const gid = newId();
+  openSheet(
+    `<h2>I Already Got Something</h2>
+     <p class="muted">So nobody else buys the same thing. Everyone visiting the list will see what you add (but not your name).</p>
+     <label class="f" for="gf-what">What is it?</label>
+     <input class="in" id="gf-what" maxlength="80" placeholder="Wooden train set" autocomplete="off" />
+     <div id="gf-similar" class="gf-similar" hidden></div>
+     <div class="seg" data-g="cat">${GIFT_CATS.map(([k, l]) => `<button type="button" data-v="${k}" aria-pressed="${k === cat}">${l}</button>`).join("")}</div>
+     <div id="gf-size-row" hidden><label class="f" for="gf-size">Size</label>${sizeSelect('id="gf-size"', "", { kind: "both", blank: "Size (optional)" })}</div>
+     <label class="f" for="gf-url">Store link <span class="muted">(optional)</span></label>
+     <input class="in" id="gf-url" type="url" inputmode="url" maxlength="600" placeholder="https://…" />
+     <label class="f" for="gf-from">Your name <span class="muted">(optional)</span></label>
+     <input class="in" id="gf-from" maxlength="40" placeholder="So ${esc(CONFIG.babyName)}'s family can say thank you" autocomplete="name" />
+     <p class="muted nt-note">Only ${esc(CONFIG.ownerName || "the family")} sees your name. You can remove your entry later from this phone or computer.</p>
+     <div class="err sheet-err" hidden></div>
+     <div class="sheet-actions"><span class="spacer"></span>
+       <button class="btn ghost" data-act="cancel">Cancel</button>
+       <button class="btn" data-act="save">Add It</button></div>`,
+    (el) => {
+      const $ = (q) => el.querySelector(q);
+      setTimeout(() => $("#gf-what").focus(), 50);
+      el.querySelector('.seg[data-g="cat"]').addEventListener("click", (ev) => {
+        const b = ev.target.closest("[data-v]"); if (!b) return;
+        cat = b.dataset.v;
+        el.querySelectorAll('.seg[data-g="cat"] [data-v]').forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+        $("#gf-size-row").hidden = cat !== "clothes";
+      });
+      // While typing: show anything that looks like the same gift, already added or on the wishlist.
+      $("#gf-what").addEventListener("input", () => {
+        const v = $("#gf-what").value;
+        const dupes = list(S.data.gifted).filter((g) => looksSame(v, g.what)).slice(0, 3);
+        const wish = list(S.data.items).filter((i) => !isClaimed(i.id) && looksSame(v, i.title)).slice(0, 2);
+        const box = $("#gf-similar");
+        box.innerHTML = [
+          dupes.length ? `<b>Someone already added:</b> ${dupes.map((g) => esc(g.what)).join(", ")}` : "",
+          wish.length ? `<b>That's on the wishlist:</b> ${wish.map((i) => `<a href="#item-${i.id}" data-close-sheet>${esc(i.title)}</a>`).join(", ")}. If it's the same thing, tap it and choose “I'll get this” there instead.` : "",
+        ].filter(Boolean).join("<br>");
+        box.hidden = !box.innerHTML;
+      });
+      $("#gf-similar").addEventListener("click", (ev) => { if (ev.target.closest("[data-close-sheet]")) { closeSheet(false); setTimeout(() => { tab = "wishlist"; render(); openDeepLink(); }, 0); } });
+      el.querySelector('[data-act="cancel"]').addEventListener("click", () => closeSheet());
+      wireSave(el, async () => {
+        const what = $("#gf-what").value.trim();
+        if (!what) throw new Error("Tell us what it is.");
+        const link = $("#gf-url").value.trim();
+        if (link && !/^https?:\/\/[^\s]+\.[^\s]+/i.test(link)) throw new Error("That link doesn't look right. Paste the full address, or leave it blank.");
+        await store.addGifted({ id: gid, what, cat, size: cat === "clothes" ? $("#gf-size").value : "", url: link }, $("#gf-from").value.trim());
+        return "Added. Thank you!";
+      });
+    }
+  );
+}
+
 // ── first-time guide (sites with CONFIG.guide) ───────────────────────
 // Five short screens for the list's owner, shown once after the first sign-in on a device,
 // and any time from "How This Works".
@@ -408,6 +509,7 @@ function guideSteps() {
     { icon: "🎁", title: "Add a gift", text: `Tap <b>+ Add a Gift</b>. Paste a link from any store's website and tap <b>Fill in</b>: the photo, name and price fill in for you. Then tap <b>Save</b>. No link? Just type a name.` },
     { icon: "💌", title: "Share the list", text: `Tap <b>Share ${n}'s List</b> to copy the link (paste it into a text or email) or to show a QR code people can scan with their phone camera.` },
     { icon: "✅", title: "When someone's getting it", text: `A gift someone picked shows <b>Claimed</b>, with their name if they left one. When it arrives, tap <b>Received</b>: it leaves the list and their name goes on your <b>Thank-You Notes</b> list.` },
+    ...(MAIN_TABS.includes("gifted") ? [{ icon: "🎄", title: giftedName().title, text: `On this tab, guests can note gifts they bought that aren't on the list, so nobody doubles up. Any names they leave go on your <b>Thank-You Notes</b>. You can delete any entry, or tap <b>Start Fresh</b> after the holidays.` }] : []),
     { icon: "🙂", title: "You can't break anything", text: `Tap <b>Edit</b> on any gift to change or delete it. Still deciding about something? Open <b>More details</b> and tick <b>Hide from guests</b>. You can reopen this guide anytime from <b>How This Works</b>.` },
   ];
 }
@@ -2248,6 +2350,12 @@ $app.addEventListener("input", (ev) => {
     if (out) out.innerHTML = familyResults();
     return;
   }
+  if (ev.target.id === "gifted-search") {
+    giftedQuery = ev.target.value.slice(0, 60);
+    const out = document.getElementById("gifted-results");
+    if (out) out.innerHTML = giftedResults();
+    return;
+  }
   if (ev.target.id !== "closet-search") return;
   closetQuery = ev.target.value.slice(0, 60);
   const out = document.getElementById("closet-results");
@@ -2276,7 +2384,7 @@ $app.addEventListener("toggle", (ev) => { // remember which brands are open acro
   if (d.classList?.contains("brand-fold")) { if (d.open) openBrands.add(d.dataset.brand); else openBrands.delete(d.dataset.brand); }
 }, true);
 $app.addEventListener("keydown", (ev) => {
-  if ((ev.target.id === "closet-search" || ev.target.id === "family-search") && ev.key === "Enter") ev.target.blur(); // closes the phone keyboard
+  if (["closet-search", "family-search", "gifted-search"].includes(ev.target.id) && ev.key === "Enter") ev.target.blur(); // closes the phone keyboard
 });
 $app.addEventListener("click", (ev) => {
   const t = ev.target.closest("[data-tab],[data-act],[data-filter]");
@@ -2306,6 +2414,10 @@ $app.addEventListener("click", (ev) => {
     case "claim": return claimSheet(id);
     case "notify": return notifySheet(id);
     case "guide": return guideSheet();
+    case "add-gifted": return giftedSheet();
+    case "remove-gifted": return act(`rg:${id}`, () => store.removeGifted(id), "Removed");
+    case "delete-gifted": if (confirmTap(`dg:${id}`)) act(`dg:${id}`, () => store.deleteGifted(id), "Deleted"); return;
+    case "clear-gifted": if (confirmTap("clear-gifted")) act("clear-gifted", () => store.clearGifted(), "Cleared. Ready for next time"); return;
     case "add-starters": return addStarters();
     case "share-item": return shareItem(id);
     case "undo-delete": return act("undo", () => store.undoBulkDelete(), "Restored");
@@ -2322,7 +2434,7 @@ $app.addEventListener("click", (ev) => {
     case "show-item": return act(`show:${id}`, () => store.showItem(id), "Now showing to guests");
     case "edit-print": return itemSheet({ dest: "closet", cat: "clothes", existing: S.data.prints[id] });
     case "edit-toy": return itemSheet({ dest: "closet", cat: hasCat(S.data.toys[id] || {}), existing: S.data.toys[id] });
-    case "add": return tab === "family" ? familySheet() : tab === "sizes" ? brandSheet() : itemSheet();
+    case "add": return tab === "family" ? familySheet() : tab === "sizes" ? brandSheet() : tab === "gifted" ? giftedSheet() : itemSheet();
     case "edit-family": return familySheet(S.data.family?.[id]);
     case "family-got": if (confirmTap(`fam-got:${id}`)) act(`fam-got:${id}`, () => store.deleteFamilyItem(id), "Removed from the list"); return;
     case "add-brand": return brandSheet();

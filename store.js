@@ -10,7 +10,7 @@
 //   • Retries are capped (2) with backoff, only for transient errors, and every
 //     change is idempotent on the server, so a retry can't double a write.
 //   • Identical in-flight requests are merged (double taps send one request).
-import { CONFIG } from "./config.js?v=1020-1553";
+import { CONFIG } from "./config.js?v=1020-2045";
 
 const SDK = "https://www.gstatic.com/firebasejs/11.0.2";
 const CACHE_KEY = `closet:${CONFIG.wishlistId}`;
@@ -46,6 +46,9 @@ async function mineFrom(data) {
   const mine = new Set();
   for (const [itemId, c] of Object.entries(data?.claims || {})) {
     if (c?.h && c.h === (await sha256hex(`${key}:${itemId}`))) mine.add(itemId);
+  }
+  for (const [gid, g] of Object.entries(data?.gifted || {})) {   // "Already Under the Tree" entries this browser added
+    if (g?.h && g.h === (await sha256hex(`${key}:${gid}`))) mine.add(gid);
   }
   return mine;
 }
@@ -210,6 +213,10 @@ export async function createFirebaseStore() {
 
     claim: (itemId, from = "") => mutate("claim", { itemId, key: claimKey(), ...(from && { from }) }),
     unclaim: (itemId) => mutate("unclaim", { itemId, key: claimKey() }),
+    addGifted: (item, from = "") => mutate("addGifted", { item, key: claimKey(), ...(from && { from }) }),
+    removeGifted: (id) => mutate("removeGifted", { id, key: claimKey() }),
+    deleteGifted: (id) => mutate("deleteGifted", { id }),
+    clearGifted: () => mutate("clearGifted", {}),
     resetClaim: (itemId) => mutate("resetClaim", { itemId }),
     upsertItem: (item) => mutate("upsertItem", { item }),
     deleteItem: (id) => mutate("deleteItem", { id }),
@@ -320,7 +327,9 @@ export function createDemoStore() {
     claims: { i2: { h: "someone-else", at: now } },
   };
   // Other sites (e.g. Luca's wishlist) preview as a brand-new, empty list.
-  if (CONFIG.site && CONFIG.site !== "merritt") Object.assign(data, { items: {}, claims: {}, family: {}, prints: {}, toys: {}, brands: {}, plans: [], styleFavs: {}, obsessions: null });
+  if (CONFIG.site && CONFIG.site !== "merritt") Object.assign(data, { items: {}, claims: {}, family: {}, prints: {}, toys: {}, brands: {}, plans: [], styleFavs: {}, obsessions: null,
+    gifted: { g1: { id: "g1", what: "Wooden train set", cat: "toy", size: "", url: "https://example.com/products/train", h: "x", at: now - 86400000 * 2 },
+      g2: { id: "g2", what: "Dinosaur pajamas", cat: "clothes", size: "2T", url: "", h: "x", at: now - 86400000 } } });
   const mine = new Set(CONFIG.site && CONFIG.site !== "merritt" ? [] : ["i3"]);
   data.typeLists = {};
   const DEMO_DEFAULTS = {
@@ -348,6 +357,10 @@ export function createDemoStore() {
     signInOwner: m(() => { user = { isOwner: true, email: [].concat(CONFIG.ownerEmail)[0] }; }),
     signOut: m(() => { user = null; }),
     claim: m((id, from = "") => { if (data.claims[id]?.h) throw new FriendlyError("Someone already claimed this one."); data.claims[id] = { h: "mine", at: Date.now() }; mine.add(id); if (from) priv.givers[id] = { from, at: Date.now() }; }),
+    addGifted: m((item, from = "") => { data.gifted = data.gifted || {}; data.gifted[item.id] = { ...item, h: "mine", at: Date.now() }; mine.add(item.id); if (from) addThank(item.what, from); }),
+    removeGifted: m((id) => { delete data.gifted?.[id]; mine.delete(id); }),
+    deleteGifted: m((id) => { delete data.gifted?.[id]; }),
+    clearGifted: m(() => { data.gifted = {}; }),
     unclaim: m((id) => { data.claims[id] = { h: null, at: Date.now() }; mine.delete(id); delete priv.givers[id]; }),
     resetClaim: m((id) => { data.claims[id] = { h: null, at: Date.now() }; mine.delete(id); delete priv.givers[id]; }),
     upsertItem: m((it) => { data.items[it.id] = { ...it, createdAt: data.items[it.id]?.createdAt ?? Date.now() }; }),

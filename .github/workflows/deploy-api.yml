@@ -32,7 +32,7 @@ jobs:
         working-directory: functions
         run: |
           npm install --ignore-scripts --no-audit --no-fund
-          node --test test/api.test.js test/importer.test.js test/private.test.js test/photos.test.js test/alerts.test.js
+          node --test test/api.test.js test/importer.test.js test/private.test.js test/photos.test.js test/alerts.test.js test/gifted.test.js
 
       - name: Sign in to Google Cloud
         uses: google-github-actions/auth@v2
@@ -64,8 +64,9 @@ jobs:
         shell: bash
         run: |
           if gcloud run services describe luca-api --region us-central1 --project merrittscloset-4d74f >/dev/null 2>&1; then
+            # GUEST_GIFTED: guests can post to "Already Under the Tree" (Luca's list only).
             gcloud run deploy luca-api --source functions --function api --base-image nodejs22 \
-              --region us-central1 --project merrittscloset-4d74f --quiet
+              --region us-central1 --project merrittscloset-4d74f --quiet --update-env-vars GUEST_GIFTED=true
           else
             echo "luca-api isn't set up yet (or the deploy account can't see it); skipping."
           fi
