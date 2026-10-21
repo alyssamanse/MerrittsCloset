@@ -10,7 +10,7 @@
 //   • Retries are capped (2) with backoff, only for transient errors, and every
 //     change is idempotent on the server, so a retry can't double a write.
 //   • Identical in-flight requests are merged (double taps send one request).
-import { CONFIG } from "./config.js?v=1020-2045";
+import { CONFIG } from "./config.js?v=1020-2053";
 
 const SDK = "https://www.gstatic.com/firebasejs/11.0.2";
 const CACHE_KEY = `closet:${CONFIG.wishlistId}`;
@@ -328,8 +328,8 @@ export function createDemoStore() {
   };
   // Other sites (e.g. Luca's wishlist) preview as a brand-new, empty list.
   if (CONFIG.site && CONFIG.site !== "merritt") Object.assign(data, { items: {}, claims: {}, family: {}, prints: {}, toys: {}, brands: {}, plans: [], styleFavs: {}, obsessions: null,
-    gifted: { g1: { id: "g1", what: "Wooden train set", cat: "toy", size: "", url: "https://example.com/products/train", h: "x", at: now - 86400000 * 2 },
-      g2: { id: "g2", what: "Dinosaur pajamas", cat: "clothes", size: "2T", url: "", h: "x", at: now - 86400000 } } });
+    gifted: { g1: { id: "g1", what: "Wooden train set", cat: "toy", size: "", h: "x", at: now - 86400000 * 2 },
+      g2: { id: "g2", what: "Dinosaur pajamas", cat: "clothes", size: "2T", h: "x", at: now - 86400000 } } });
   const mine = new Set(CONFIG.site && CONFIG.site !== "merritt" ? [] : ["i3"]);
   data.typeLists = {};
   const DEMO_DEFAULTS = {

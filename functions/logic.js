@@ -152,19 +152,13 @@ function cleanEmail(v) {
   if (!/^[^\s@<>"',;()]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(e)) bad("That email address doesn't look right.");
   return e;
 }
-// "Already Under the Tree": something a guest already bought, so nobody doubles up.
-// Text only plus an optional store link (never fetched, never shown as an image).
+// "Already Under the Tree": something a guest already bought, so nobody doubles up. Text only.
 const GIFTED_CATS = ["toy", "clothes", "book", "other"];
 function cleanGifted(g) {
-  onlyKeys(g, ["id", "what", "cat", "size", "url"], "gift");
+  onlyKeys(g, ["id", "what", "cat", "size"], "gift");               // no links or photos from guests
   const cat = g.cat ?? "toy";
   if (!GIFTED_CATS.includes(cat)) bad("Pick toy, clothes, book or other");
-  const link = url(g.url, "Link");
-  if (link) {
-    const h = new URL(link).hostname.toLowerCase();
-    if (h === "localhost" || /^(\d+\.){3}\d+$/.test(h) || h.includes(":") || !h.includes(".")) bad("That link doesn't look like a store page");
-  }
-  return { id: id(g.id), what: str(g.what, "What it is", 80, { required: true }), cat, size: cat === "clothes" ? str(g.size, "Size", 20) : "", url: link };
+  return { id: id(g.id), what: str(g.what, "What it is", 80, { required: true }), cat, size: cat === "clothes" ? str(g.size, "Size", 20) : "" };
 }
 function cleanStyleFav(f) {
   onlyKeys(f, STYLE_FAV_FIELDS, "style");

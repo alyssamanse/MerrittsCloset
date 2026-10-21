@@ -24,15 +24,15 @@ test("a guest adds an entry; it shows publicly, their name stays private", async
   assert.equal(Object.keys(store.docs[PRIV].thanks).length, 0, "its thank-you goes too");
 });
 
-test("validation: text only, short, safe links, known categories", async () => {
+test("validation: text only (links refused), short, known categories", async () => {
   fresh();
   const bad = [
     gift("gift_00000002", { what: "" }), gift("gift_00000003", { what: "x".repeat(81) }),
-    gift("gift_00000004", { url: "javascript:alert(1)" }), gift("gift_00000005", { url: "http://192.168.1.1/x" }),
+    gift("gift_00000004", { url: "https://example.com/x" }), gift("gift_00000005", { url: "javascript:alert(1)" }),
     gift("gift_00000006", { cat: "car" }), gift("gift_00000007", { image: "https://x.com/a.jpg" }),
   ];
   for (const item of bad) assert.equal((await call("addGifted", { item, key: key() })).status, 400, JSON.stringify(item));
-  const ok = await call("addGifted", { item: gift("gift_00000008", { cat: "clothes", size: "2T", url: "https://www.janieandjack.com/sweater.html" }), key: key() });
+  const ok = await call("addGifted", { item: gift("gift_00000008", { cat: "clothes", size: "2T" }), key: key() });
   assert.equal(ok.status, 200);
   assert.equal(ok.body.data.gifted.gift_00000008.size, "2T");
 });

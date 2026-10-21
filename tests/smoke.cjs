@@ -243,9 +243,8 @@ const openSheet = async (p, sel, expectTitle) => {
     must((await l.locator("#gf-similar").innerText()).includes("Someone already added"), "no duplicate warning");
     await l.fill("#gf-what", "Toddler rain boots"); await l.click('.seg[data-g="cat"] [data-v="clothes"]');
     must(await l.locator("#gf-size-row").isVisible(), "no size for clothes");
-    await l.fill("#gf-url", "not a link"); await l.click('.sheet-bg [data-act="save"]'); await l.waitForTimeout(200);
-    must((await l.locator(".sheet-err").innerText()).includes("link"), "bad link accepted");
-    await l.fill("#gf-url", "https://example.com/boots"); await l.fill("#gf-from", "Aunt Jen");
+    must(await l.locator("#gf-url").count() === 0, "link field still offered to guests");
+    await l.fill("#gf-from", "Aunt Jen");
     await l.click('.sheet-bg [data-act="save"]'); await l.waitForTimeout(600);
     const row = l.locator(".gifted-row", { hasText: "Toddler rain boots" });
     must(await row.count() === 1, "entry not shown");

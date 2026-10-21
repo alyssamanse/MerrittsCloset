@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1020-2045";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1020-2045";
-const BUILD = "1020-2045"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1020-2053";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1020-2053";
+const BUILD = "1020-2053"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = CONFIG.tabs || ["wishlist", "closet", "sizes"];
@@ -401,7 +401,6 @@ async function addStarters() {
 
 // ── "Already Under the Tree" (guests note gifts they already bought) ───────────────
 const GIFT_CATS = [["toy", "Toy"], ["clothes", "Clothes"], ["book", "Book"], ["other", "Other"]];
-const hostOf2 = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
 const fmtShort = (t) => new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 function giftedView() {
   const all = list(S.data.gifted);
@@ -427,13 +426,11 @@ function giftedResults() {
   return `<ul class="gifted-list">${shown.map(giftedRow).join("")}</ul>`;
 }
 function giftedRow(g) {
-  const link = safeUrl(g.url) && !String(g.url).startsWith("data:") ? g.url : "";
   const mine = S.mine.has(g.id);
   const cat = (GIFT_CATS.find(([k]) => k === g.cat) || [, "Other"])[1];
   return `<li class="gifted-row">
     <div class="gifted-main"><b>${esc(g.what)}</b>
       <div class="chips"><span class="chip ink">${esc(cat)}</span>${g.size ? `<span class="chip">Size ${esc(g.size)}</span>` : ""}<span class="muted gifted-date">Added ${fmtShort(g.at)}</span></div>
-      ${link ? `<a class="link gifted-link" href="${esc(link)}" target="_blank" rel="noopener noreferrer nofollow ugc">${esc(hostOf2(link))} ↗</a>` : ""}
     </div>
     ${owner() ? `<button class="link danger" data-act="delete-gifted" data-id="${g.id}" ${dis(`dg:${g.id}`)}>${armedLabel(`dg:${g.id}`, "Delete", "Tap again")}</button>`
       : mine ? `<button class="link" data-act="remove-gifted" data-id="${g.id}" ${dis(`rg:${g.id}`)}>Remove</button>` : ""}
@@ -453,8 +450,6 @@ function giftedSheet() {
      <div id="gf-similar" class="gf-similar" hidden></div>
      <div class="seg" data-g="cat">${GIFT_CATS.map(([k, l]) => `<button type="button" data-v="${k}" aria-pressed="${k === cat}">${l}</button>`).join("")}</div>
      <div id="gf-size-row" hidden><label class="f" for="gf-size">Size</label>${sizeSelect('id="gf-size"', "", { kind: "both", blank: "Size (optional)" })}</div>
-     <label class="f" for="gf-url">Store link <span class="muted">(optional)</span></label>
-     <input class="in" id="gf-url" type="url" inputmode="url" maxlength="600" placeholder="https://…" />
      <label class="f" for="gf-from">Your name <span class="muted">(optional)</span></label>
      <input class="in" id="gf-from" maxlength="40" placeholder="So ${esc(CONFIG.babyName)}'s family can say thank you" autocomplete="name" />
      <p class="muted nt-note">Only ${esc(CONFIG.ownerName || "the family")} sees your name. You can remove your entry later from this phone or computer.</p>
@@ -488,9 +483,7 @@ function giftedSheet() {
       wireSave(el, async () => {
         const what = $("#gf-what").value.trim();
         if (!what) throw new Error("Tell us what it is.");
-        const link = $("#gf-url").value.trim();
-        if (link && !/^https?:\/\/[^\s]+\.[^\s]+/i.test(link)) throw new Error("That link doesn't look right. Paste the full address, or leave it blank.");
-        await store.addGifted({ id: gid, what, cat, size: cat === "clothes" ? $("#gf-size").value : "", url: link }, $("#gf-from").value.trim());
+        await store.addGifted({ id: gid, what, cat, size: cat === "clothes" ? $("#gf-size").value : "" }, $("#gf-from").value.trim());
         return "Added. Thank you!";
       });
     }
