@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1021-0512";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1021-0512";
-const BUILD = "1021-0512"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1021-0522";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1021-0522";
+const BUILD = "1021-0522"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = CONFIG.tabs || ["wishlist", "closet", "sizes"];
@@ -444,9 +444,15 @@ function giftedRow(g) {
     ${g.image ? `<img class="gifted-img" src="${esc(g.image)}" alt="" referrerpolicy="no-referrer" loading="lazy" onerror="this.remove()">` : ""}
     <div class="gifted-main"><b>${esc(g.what)}</b>
       <div class="chips"><span class="chip ink">${esc(cat)}</span>${g.size ? `<span class="chip">Size ${esc(g.size)}</span>` : ""}${g.fromList ? `<span class="chip">From the wishlist</span>` : ""}</div>
+      ${owner() && giftedFrom(g) ? `<div class="gifted-from">From ${esc(giftedFrom(g))}</div>` : ""}
     </div>
     ${actions}
   </li>`;
+}
+// Owners only: who added it (or claimed it from the wishlist). Older entries kept the name on the thank-you list.
+function giftedFrom(g) {
+  if (g.fromList) return giverOf(g.id) || "";
+  return S.private?.giftFrom?.[g.id]?.from || list(S.private?.thanks).find((t) => t.itemId === g.id)?.from || "";
 }
 // A product name from the words in a store link, worked out on this device. The link is never sent or saved.
 function nameFromLink(raw) {
@@ -488,8 +494,8 @@ function giftedSheet(existing = null) {
      <div id="gf-similar" class="gf-similar" hidden></div>
      <div class="seg" data-g="cat">${GIFT_CATS.map(([k, l]) => `<button type="button" data-v="${k}" aria-pressed="${k === cat}">${l}</button>`).join("")}</div>
      <div id="gf-size-row" ${cat === "clothes" ? "" : "hidden"}><label class="f" for="gf-size">Size</label>${sizeSelect('id="gf-size"', e.size || "", { kind: "both", blank: "Size (optional)" })}</div>
-     ${existing ? "" : !HAS_THANKS ? `<p class="muted nt-note">You can edit or remove your entry later from this phone or computer.</p>` : `<label class="f" for="gf-from">Your name <span class="muted">(optional)</span></label>
-     <input class="in" id="gf-from" maxlength="40" placeholder="So ${esc(CONFIG.babyName)}'s family can say thank you" autocomplete="name" />
+     ${existing ? "" : `<label class="f" for="gf-from">Your name <span class="muted">(optional)</span></label>
+     <input class="in" id="gf-from" maxlength="40" placeholder="${HAS_THANKS ? `So ${esc(CONFIG.babyName)}'s family can say thank you` : `So ${esc(CONFIG.babyName)}'s family knows who it's from`}" autocomplete="name" />
      <p class="muted nt-note">Only ${esc(CONFIG.ownerName || "the family")} sees your name. You can edit or remove your entry later from this phone or computer.</p>`}
      <div class="err sheet-err" hidden></div>
      <div class="sheet-actions"><span class="spacer"></span>

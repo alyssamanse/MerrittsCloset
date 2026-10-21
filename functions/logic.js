@@ -811,10 +811,10 @@ const MAX_OBSESSIONS = 30;
 const ENABLE_GIFTED = () => process.env.GUEST_GIFTED === "true"; // Luca's server only
 const MAX_ALERTS_PER_ITEM = 25, MAX_ALERTS_TOTAL = 300;
 const MAX_THANKS = 200;
-const emptyPrivate = () => ({ givers: {}, thanks: {}, drafts: {}, alerts: {}, giftLinks: {} });
+const emptyPrivate = () => ({ givers: {}, thanks: {}, drafts: {}, alerts: {}, giftLinks: {}, giftFrom: {} });
 function reducePrivate(prevPriv, action, payload, { prevPublic, nextPublic, publicChanged, isOwner, now, newId }) {
   const priv = structuredClone(prevPriv || emptyPrivate());
-  priv.givers = priv.givers || {}; priv.thanks = priv.thanks || {}; priv.drafts = priv.drafts || {}; priv.alerts = priv.alerts || {}; priv.giftLinks = priv.giftLinks || {};
+  priv.givers = priv.givers || {}; priv.thanks = priv.thanks || {}; priv.drafts = priv.drafts || {}; priv.alerts = priv.alerts || {}; priv.giftLinks = priv.giftLinks || {}; priv.giftFrom = priv.giftFrom || {};
   const p = payload || {};
   const before = JSON.stringify(priv);
   const addThank = (title, from, itemId = "") => {
@@ -858,7 +858,7 @@ function reducePrivate(prevPriv, action, payload, { prevPublic, nextPublic, publ
     }
   } else if (publicChanged && action === "addGifted") {
     const from = str(p.from, "Name", 40);
-    if (from) addThank(p.item.what, from, p.item.id);
+    if (from) { addThank(p.item.what, from, p.item.id); priv.giftFrom[p.item.id] = { from, at: now }; } // who added it, for the owners
     const link = url(p.link, "Link");
     if (link) priv.giftLinks[p.item.id] = link;
   } else if (action === "editGifted") {
@@ -869,9 +869,9 @@ function reducePrivate(prevPriv, action, payload, { prevPublic, nextPublic, publ
     else if (isOwner && p.link === "") delete priv.giftLinks[p.item.id]; // a guest's blank box means "no change" (they can't see the saved link)
   } else if (publicChanged && (action === "removeGifted" || action === "deleteGifted")) {
     for (const [tid, t] of Object.entries(priv.thanks)) if (t.itemId === p.id && !t.done) delete priv.thanks[tid];
-    delete priv.giftLinks[p.id];
+    delete priv.giftLinks[p.id]; delete priv.giftFrom[p.id];
   } else if (publicChanged && action === "clearGifted") {
-    priv.giftLinks = {};
+    priv.giftLinks = {}; priv.giftFrom = {};
   } else if (publicChanged) {
     const iid = p.itemId || p.id;
     // The item left the public list (deleted, received, hidden): drop its waiting list, no email.

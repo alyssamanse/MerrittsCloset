@@ -10,7 +10,7 @@
 //   • Retries are capped (2) with backoff, only for transient errors, and every
 //     change is idempotent on the server, so a retry can't double a write.
 //   • Identical in-flight requests are merged (double taps send one request).
-import { CONFIG } from "./config.js?v=1021-0512";
+import { CONFIG } from "./config.js?v=1021-0522";
 
 const SDK = "https://www.gstatic.com/firebasejs/11.0.2";
 const CACHE_KEY = `closet:${CONFIG.wishlistId}`;
@@ -344,8 +344,8 @@ export function createDemoStore() {
   let notify = () => {};
   // Owner-only private data (gifter names, thank-yous), like the server's private document.
   const priv = { alerts: { i10: [{ e: "grandma@example.com", at: now }] }, drafts: { d1: { id: "d1", category: "toy", title: "Wooden Play Kitchen", brand: "Hape", price: "$129", priority: "nice", image: img("#EADFD3", "#A7B8A0"), createdAt: now } }, givers: { i3: { from: "Aunt Jen", at: now } }, thanks: { th1: { id: "th1", itemId: "", title: "Wooden Rattle", from: "Grandma Sue", at: now - 86400000 * 3, done: false } } };
-  priv.giftLinks = {};
-  if (CONFIG.site && CONFIG.site !== "merritt") Object.assign(priv, { drafts: {}, givers: {}, thanks: {}, alerts: {}, giftLinks: { g2: "https://example.com/products/dinosaur-pajamas" } });
+  priv.giftLinks = {}; priv.giftFrom = {};
+  if (CONFIG.site && CONFIG.site !== "merritt") Object.assign(priv, { drafts: {}, givers: {}, thanks: {}, alerts: {}, giftLinks: { g2: "https://example.com/products/dinosaur-pajamas" }, giftFrom: { g1: { from: "Grandpa Joe", at: now } } });
   const addThank = (title, from) => { const tid = `th${Math.random().toString(36).slice(2, 8)}`; priv.thanks[tid] = { id: tid, itemId: "", title, from, at: Date.now(), done: false }; };
   for (const b of Object.values(data.brands)) b.sizeAt = now;
   const firstBrand = Object.values(data.brands)[0]; if (firstBrand) firstBrand.sizeAt = now - 86400000 * 75; // shows the reminder
@@ -359,11 +359,11 @@ export function createDemoStore() {
     signInOwner: m(() => { user = { isOwner: true, email: [].concat(CONFIG.ownerEmail)[0] }; }),
     signOut: m(() => { user = null; }),
     claim: m((id, from = "") => { if (data.claims[id]?.h) throw new FriendlyError("Someone already claimed this one."); data.claims[id] = { h: "mine", at: Date.now() }; mine.add(id); if (from) priv.givers[id] = { from, at: Date.now() }; }),
-    addGifted: m((item, from = "", link = "") => { data.gifted = data.gifted || {}; data.gifted[item.id] = { ...item, h: "mine", at: Date.now() }; mine.add(item.id); if (from) addThank(item.what, from); if (link) priv.giftLinks[item.id] = link; }),
+    addGifted: m((item, from = "", link = "") => { data.gifted = data.gifted || {}; data.gifted[item.id] = { ...item, h: "mine", at: Date.now() }; mine.add(item.id); if (from) { addThank(item.what, from); priv.giftFrom[item.id] = { from, at: Date.now() }; } if (link) priv.giftLinks[item.id] = link; }),
     editGifted: m((item, link) => { const g = data.gifted?.[item.id]; if (!g || !(mine.has(item.id) || user?.isOwner)) throw new FriendlyError("Only the person who added it can change it."); Object.assign(g, { what: item.what, cat: item.cat, size: item.size }); if (link) priv.giftLinks[item.id] = link; else if (user?.isOwner && link === "") delete priv.giftLinks[item.id]; }),
-    removeGifted: m((id) => { delete data.gifted?.[id]; mine.delete(id); delete priv.giftLinks[id]; }),
-    deleteGifted: m((id) => { delete data.gifted?.[id]; delete priv.giftLinks[id]; }),
-    clearGifted: m(() => { data.gifted = {}; priv.giftLinks = {}; }),
+    removeGifted: m((id) => { delete data.gifted?.[id]; mine.delete(id); delete priv.giftLinks[id]; delete priv.giftFrom[id]; }),
+    deleteGifted: m((id) => { delete data.gifted?.[id]; delete priv.giftLinks[id]; delete priv.giftFrom[id]; }),
+    clearGifted: m(() => { data.gifted = {}; priv.giftLinks = {}; priv.giftFrom = {}; }),
     unclaim: m((id) => { data.claims[id] = { h: null, at: Date.now() }; mine.delete(id); delete priv.givers[id]; }),
     resetClaim: m((id) => { data.claims[id] = { h: null, at: Date.now() }; mine.delete(id); delete priv.givers[id]; }),
     upsertItem: m((it) => { data.items[it.id] = { ...it, createdAt: data.items[it.id]?.createdAt ?? Date.now() }; }),

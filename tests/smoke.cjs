@@ -247,7 +247,7 @@ const openSheet = async (p, sel, expectTitle) => {
     await l.fill("#gf-what", "Toddler rain boots"); await l.click('.seg[data-g="cat"] [data-v="clothes"]');
     must(await l.locator("#gf-size-row").isVisible(), "no size for clothes");
     must(await l.locator("#gf-url").count() === 0, "link field still offered to guests");
-    must(await l.locator("#gf-from").count() === 0, "name box shown on a page without thank-you notes");
+    await l.fill("#gf-from", "Aunt Jen");
     await l.click('.sheet-bg [data-act="save"]'); await l.waitForTimeout(600);
     const row = l.locator(".gifted-row", { hasText: "Toddler rain boots" });
     must(await row.count() === 1, "entry not shown");
@@ -279,11 +279,13 @@ const openSheet = async (p, sel, expectTitle) => {
     must(await lo.locator(".thanks").count() === 0, "thank-you notes shown on Luca's page");
     await lo.click("[data-tab=gifted]"); await lo.waitForTimeout(200);
     must(await lo.locator(".gifted-row.from-list [data-act]").count() === 0, "claimed rows should have no buttons here");
+    must(!(await lo.locator("main").innerText()).includes("Grandpa Joe"), "gifter name shown to a guest");
     await lo.locator("[data-act=signin]").first().click(); await lo.waitForTimeout(500);
     for (let k = 0; k < 8 && await lo.locator(".guide").count(); k++) await lo.click('.guide [data-m="next"]');
     if (!(await lo.locator(".gifted-row").first().isVisible().catch(() => false))) { await lo.click("[data-tab=gifted]"); await lo.waitForTimeout(250); }
     must(await lo.locator(".gifted-row", { hasText: "Wooden train set" }).locator("[data-act=gifted-photo]").count() === 0, "Add Photo shown without a link");
     must(await lo.locator(".gifted-row", { hasText: "Wooden train set" }).locator("[data-act=edit-gifted]").count() === 1, "owner can't edit");
+    must((await lo.locator(".gifted-row", { hasText: "Wooden train set" }).innerText()).includes("From Grandpa Joe"), "admin can't see who added it");
     must(!(await lo.locator("#gifted-results").innerText()).includes("Added "), "added date still shown");
     await lo.locator(".gifted-row", { hasText: "Dinosaur pajamas" }).locator("[data-act=gifted-photo]").click(); await lo.waitForTimeout(800);
     await lo.locator(".pf-choice").first().click(); await lo.waitForTimeout(600);

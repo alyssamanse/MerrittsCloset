@@ -17,6 +17,11 @@ test("a guest's link is kept only in the private record; owners can edit any ent
   assert.ok(!JSON.stringify(store.docs[MAIN]).includes("shop.example.com"), "link leaked into the public doc");
   assert.ok(!JSON.stringify(r.body).includes("shop.example.com"), "link sent back to a guest");
   assert.equal(store.docs[PRIV].giftLinks.gift_link0001, "https://shop.example.com/products/train");
+  await call("addGifted", { item: gift("gift_name0001"), key: k, from: "Aunt Jen" });
+  assert.equal(store.docs[PRIV].giftFrom.gift_name0001.from, "Aunt Jen");
+  assert.ok(!JSON.stringify(store.docs[MAIN]).includes("Aunt Jen"), "name leaked into the public doc");
+  await call("removeGifted", { id: "gift_name0001", key: k });
+  assert.equal(store.docs[PRIV].giftFrom.gift_name0001, undefined);
   assert.equal((await call("addGifted", { item: gift("gift_link0002"), key: k, link: "javascript:alert(1)" })).status, 400);
   // guest edit with no link leaves it; a new link replaces it
   await call("editGifted", { item: gift("gift_link0001", { what: "Train" }), key: k });
