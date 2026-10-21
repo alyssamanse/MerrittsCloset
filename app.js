@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1020-2119";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1020-2119";
-const BUILD = "1020-2119"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1021-0507";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1021-0507";
+const BUILD = "1021-0507"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = CONFIG.tabs || ["wishlist", "closet", "sizes"];
@@ -404,11 +404,12 @@ const GIFT_CATS = [["toy", "Toy"], ["clothes", "Clothes"], ["book", "Book"], ["o
 const fmtShort = (t) => new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 function giftedView() {
   const all = list(S.data.gifted);
+  const total = all.length + claimedAsGifts().length;
   const n = giftedName();
   return `
     <div class="note">Bought ${esc(CONFIG.babyName)} something that isn't on the wishlist? Add it here so nobody doubles up. Thinking of buying something? Search first.</div>
     ${owner() && CONFIG.guide ? `<div class="owner-bar"><button class="link" data-act="guide">How This Works</button></div>` : ""}
-    <div class="section-title"><h2>${esc(n.title)}</h2><span class="muted">${all.length} ${all.length === 1 ? "gift" : "gifts"}</span></div>
+    <div class="section-title"><h2>${esc(n.title)}</h2><span class="muted">${total} ${total === 1 ? "gift" : "gifts"}</span></div>
     <button class="btn gifted-add" data-act="add-gifted">I Already Got Something</button>
     <div class="search">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
@@ -544,18 +545,22 @@ function giftedSheet(existing = null) {
 }
 
 // ── first-time guide (sites with CONFIG.guide) ───────────────────────
-// Five short screens for the list's owner, shown once after the first sign-in on a device,
+// A few short screens for the list's owner, shown once after the first sign-in on a device,
 // and any time from "How This Works".
 // Remembered per owner (and per device), so each owner sees it on their own first sign-in.
 const GUIDE_KEY = () => `closet:guideSeen:${CONFIG.site || "merritt"}:${(S.user?.email || "").toLowerCase()}`;
 function guideSteps() {
   const n = esc(CONFIG.babyName);
+  const tree = MAIN_TABS.includes("gifted"), t = giftedName();
   return [
-    { icon: "👋", title: `Welcome to ${n}'s Wishlist`, text: `This is your page. Family and friends open your link, see the list, and tap <b>I'll get this</b> so nobody buys the same thing twice. Only you can change the list.` },
+    { icon: "👋", title: `Welcome to ${n}'s Wishlist`, text: `This is your page. Family and friends open your link, see the list, and tap <b>I'll get this</b> so nobody buys the same thing twice. Only you can change the list.${tree ? ` There are two pages: <b>Wishlist</b> and <b>${esc(t.tab)}</b>. Switch between them with the buttons at the bottom of the screen.` : ""}` },
     { icon: "🎁", title: "Add a gift", text: `Tap <b>+ Add a Gift</b>. Paste a link from any store's website and tap <b>Fill in</b>: the photo, name and price fill in for you. Then tap <b>Save</b>. No link? Just type a name.` },
     { icon: "💌", title: "Share the list", text: `Tap <b>Share ${n}'s List</b> to copy the link (paste it into a text or email) or to show a QR code people can scan with their phone camera.` },
-    { icon: "✅", title: "When someone's getting it", text: `A gift someone picked shows <b>Claimed</b>, with their name if they left one. When it arrives, tap <b>Received</b>: it leaves the list and their name goes on your <b>Thank-You Notes</b> list.` },
-    ...(MAIN_TABS.includes("gifted") ? [{ icon: "🎄", title: giftedName().title, text: `On this tab, guests can note gifts they bought that aren't on the list, so nobody doubles up. Any names they leave go on your <b>Thank-You Notes</b>. You can delete any entry, or tap <b>Start Fresh</b> after the holidays.` }] : []),
+    { icon: "✅", title: "When someone's getting it", text: `A gift someone picked shows <b>Claimed</b>, with their name if they left one. When it arrives, tap <b>Received</b>: it leaves the list and their name goes on your <b>Thank-You Notes</b>, at the bottom of the Wishlist page.` },
+    ...(tree ? [
+      { icon: "🎄", title: t.title, text: `The <b>${esc(t.tab)}</b> page is for gifts that <i>aren't</i> on your wishlist. Guests tap <b>I Already Got Something</b>, type what it is (or paste a link), and everyone can see it, so nobody doubles up. Gifts claimed from your wishlist show up here too.` },
+      { icon: "🧹", title: `Tidying up ${esc(t.tab)}`, text: `Tap <b>Edit</b> to fix any entry, or <b>Delete</b> to remove it. If a guest pasted a link, tap <b>Add Photo</b> to pull a picture from the store. Names guests leave go on your <b>Thank-You Notes</b>. After the holidays, tap <b>Start Fresh</b> to clear the page.` },
+    ] : []),
     { icon: "🙂", title: "You can't break anything", text: `Tap <b>Edit</b> on any gift to change or delete it. Still deciding about something? Open <b>More details</b> and tick <b>Hide from guests</b>. You can reopen this guide anytime from <b>How This Works</b>.` },
   ];
 }
