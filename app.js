@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1021-1433";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1021-1433";
-const BUILD = "1021-1433"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1026-0014";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1026-0014";
+const BUILD = "1026-0014"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = CONFIG.tabs || ["wishlist", "closet", "sizes"];
@@ -81,6 +81,25 @@ const PLACEHOLDER =
 const img = (src, cls = "", alt = "") =>
   `<img class="${cls}" src="${esc(safeUrl(src) || PLACEHOLDER)}" alt="${esc(alt)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='${PLACEHOLDER}'">`;
 
+// ── light / dark ─────────────────────────────────────────────────────
+// Light by default; each device remembers its own choice. index.html applies it before the page paints.
+const THEME_KEY = "closet:theme";
+const LIGHT_BAR = document.querySelector('meta[name="theme-color"]')?.content || "";
+const isDark = () => document.documentElement.dataset.theme === "dark";
+function setTheme(dark) {
+  if (dark) document.documentElement.dataset.theme = "dark"; else delete document.documentElement.dataset.theme;
+  try { localStorage.setItem(THEME_KEY, dark ? "dark" : "light"); } catch {}
+  const cs = document.querySelector('meta[name="color-scheme"]'); if (cs) cs.content = dark ? "dark" : "light";
+  const bar = document.querySelector('meta[name="theme-color"]');
+  if (bar) bar.content = dark ? getComputedStyle(document.documentElement).getPropertyValue("--paper").trim() : LIGHT_BAR;
+  document.querySelectorAll(".theme-toggle").forEach((b) => b.setAttribute("aria-checked", String(dark)));
+}
+if (isDark()) setTheme(true); // match the browser bar to a saved dark choice
+function themeToggle() {
+  const sun = `<svg class="tt-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></g></svg>`;
+  const moon = `<svg class="tt-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.6A8.5 8.5 0 0 1 9.4 3.5a8.5 8.5 0 1 0 11.1 11.1z" fill="currentColor"/></svg>`;
+  return `<button type="button" class="theme-toggle" role="switch" aria-checked="${isDark()}" aria-label="Dark mode" data-act="theme">${sun}<span class="tt-track"><span class="tt-knob"></span></span>${moon}</button>`;
+}
 const CREST = `<svg viewBox="0 0 96 104" width="88" height="96">
   <circle cx="48" cy="56" r="40" fill="none" stroke="currentColor" stroke-width="1"/>
   <circle cx="48" cy="56" r="35.5" fill="none" stroke="currentColor" stroke-width=".5" opacity=".55"/>
@@ -177,6 +196,7 @@ function render() {
   $app.innerHTML = `
     ${isDemo ? `<div class="demo-bar">Preview with sample data. Nothing here is saved.</div>` : ""}
     <header class="hero">
+      ${themeToggle()}
       <div class="crest" aria-hidden="true">${CREST}</div>
       <h1 class="logo" aria-label="${name}'s ${esc(CONFIG.logoSub || "Closet")}"><span class="logo-name">${name}'s</span><span class="logo-sub">${esc(CONFIG.logoSub || "Closet")}</span></h1>
       <p>${esc(CONFIG.tagline || "Her wishes, her favorites, and what she already has")}</p>
@@ -2562,6 +2582,7 @@ $app.addEventListener("click", (ev) => {
     case "refresh": return act("refresh", async () => { if (!(await store.refresh())) toast("Already up to date"); });
     case "signin": return act("signin", () => store.signInOwner());
     case "signout": return act("signout", () => store.signOut());
+    case "theme": return setTheme(!isDark());
   }
 });
 window.addEventListener("hashchange", () => {

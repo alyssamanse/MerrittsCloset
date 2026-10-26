@@ -49,6 +49,19 @@ const openSheet = async (p, sel, expectTitle) => {
     must(await f.locator("[data-to=family]").count() === 0 && (await f.locator("main").innerText()).length > 0, "family link broken");
     await f.close();
   });
+  await step("light by default; dark mode toggle is remembered on this device", async () => {
+    const t = await page(browser, "?demo");
+    must(await t.evaluate(() => document.documentElement.dataset.theme || "light") === "light", "didn't start light");
+    must(await t.locator('.theme-toggle[role=switch][aria-checked="false"]').count() === 1, "no toggle");
+    await t.click(".theme-toggle"); await t.waitForTimeout(100);
+    must(await t.evaluate(() => document.documentElement.dataset.theme) === "dark", "toggle didn't switch to dark");
+    await t.reload(); await t.waitForSelector("main");
+    must(await t.evaluate(() => document.documentElement.dataset.theme) === "dark", "dark not remembered");
+    must(await t.locator('.theme-toggle[aria-checked="true"]').count() === 1, "switch doesn't show dark");
+    await t.click(".theme-toggle"); await t.waitForTimeout(100);
+    must(await t.evaluate(() => !document.documentElement.dataset.theme && localStorage.getItem("closet:theme") === "light"), "couldn't switch back");
+    await t.close();
+  });
   await step("guests never see hidden items", async () => {
     must(await g.locator(".wl-fold[data-wl=hidden]").count() === 0, "hidden section shown to a guest");
     must(!(await g.locator("main").innerText()).includes("Wooden Play Kitchen"), "hidden item visible to a guest");

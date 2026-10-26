@@ -17,6 +17,10 @@
 <meta name="twitter:card" content="summary_large_image" />
 <link rel="apple-touch-icon" href="share-icon.png" />
 <meta name="color-scheme" content="light" />
+<script>
+  // Light unless this device chose dark. Runs before the page paints, so there's no flash.
+  try { if (localStorage.getItem("closet:theme") === "dark") { document.documentElement.dataset.theme = "dark"; document.querySelector('meta[name="color-scheme"]').content = "dark"; } } catch (e) {}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,500;1,600&family=Figtree:wght@400..800&display=swap" rel="stylesheet" />
@@ -248,7 +252,7 @@
      "she has it", cocoa-plum text. Cormorant Garamond for names and headings,
      Jost for everything you read or tap. One flourish only: the monogram crest. */
   :root {
-    --paper: #FBF7F2; --surface: #FFFDFA; --ink: #3A2E30; --taupe: #8B7F7A; --line: #E9DFD7;
+    --paper: #FBF7F2; --surface: #FFFDFA; --ink: #3A2E30; --taupe: #766A66; --line: #E9DFD7;
     --rose: #8A5560; --cocoa: #7A4D55; --rose-lt: #F4E9E6; --blush: #EEDFDA; --blush-2: #DCC3BD;
     --moss: #5E6B4E; --moss-lt: #E9ECE1; --hazel: #DCCDBB; --on-rose: #FFFFFF;
     --serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
@@ -259,7 +263,7 @@
   b, strong { font-weight: 600; }
   h1, h2, h3 { font-family: var(--serif); font-variation-settings: normal; font-weight: 500; letter-spacing: .005em; }
 
-  .hero { background: var(--paper); padding: calc(26px + env(safe-area-inset-top)) 16px 18px; }
+  .hero { background: var(--paper); padding: calc(26px + env(safe-area-inset-top)) 16px 18px; position: relative; }
   .crest { color: var(--rose); display: flex; justify-content: center; margin-bottom: 6px; }
   .crest svg { display: block; margin: 0; }
   .hero h1 { font-size: 40px; font-weight: 500; line-height: 1.05; color: var(--ink); letter-spacing: 0; }
@@ -638,10 +642,45 @@
   body:has(.bulk-bar) .toast { bottom: calc(150px + env(safe-area-inset-bottom)); }
   .og-toggle { display: flex; align-items: center; gap: 8px; margin: -4px 0 12px; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; }
   .og-toggle input { width: 18px; height: 18px; accent-color: var(--rose); margin: 0; }
+
+  /* ── Light / dark switch (top right of the header) ─────────────────── */
+  .theme-toggle { position: absolute; top: calc(10px + env(safe-area-inset-top)); right: 12px; display: flex; align-items: center; gap: 6px;
+    border: 0; background: none; padding: 6px; cursor: pointer; color: var(--taupe); }
+  .theme-toggle svg { width: 16px; height: 16px; display: block; margin: 0; flex: none; }
+  .tt-track { position: relative; width: 38px; height: 22px; border-radius: 999px; background: var(--blush); border: 1px solid var(--blush-2); transition: background .2s; }
+  .tt-knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .2s ease; }
+  .theme-toggle[aria-checked="true"] .tt-knob { transform: translateX(16px); }
+  .theme-toggle .tt-sun { color: var(--ink); } .theme-toggle .tt-moon { opacity: .55; }
+  .theme-toggle[aria-checked="true"] .tt-sun { color: inherit; opacity: .55; } .theme-toggle[aria-checked="true"] .tt-moon { opacity: 1; color: var(--ink); }
+  .theme-toggle:focus-visible { outline: 2px solid var(--rose); outline-offset: 2px; border-radius: 999px; }
+  @media (prefers-reduced-motion: reduce) { .tt-knob, .tt-track { transition: none; } }
+  .in { color: var(--ink); }
+
+  /* ── Dark mode: warm charcoal, light text, softened rose. Every text pair is at least 6:1. ── */
+  :root[data-theme="dark"] {
+    --paper: #1C1819; --surface: #272123; --ink: #F2E9E5; --taupe: #B8AAA5; --line: #3E3437;
+    --rose: #DDA2AB; --cocoa: #E7B9BF; --rose-lt: #3D2A2F; --blush: #3A2F31; --blush-2: #54454A;
+    --moss: #AFC59C; --moss-lt: #2B3326; --hazel: #5A4C40; --on-rose: #2B1C20;
+    --dot: rgba(255,255,255,.06); --stripe: rgba(255,255,255,.02);
+    --shadow: 0 1px 2px rgba(0,0,0,.35), 0 4px 14px rgba(0,0,0,.25);
+    --warn-bg: #47321F; --warn: #F2C08C; --bad: #F4948A; --toast-btn: #7A4D55;
+    color-scheme: dark;
+  }
+  :root[data-theme="dark"] .btn:not(.ghost):not(.soft), :root[data-theme="dark"] .chip.top { color: var(--on-rose); -webkit-text-fill-color: var(--on-rose); }
+  :root[data-theme="dark"] .btn.danger-btn { background: #B9483F; color: #fff; -webkit-text-fill-color: #fff; }
+  :root[data-theme="dark"] .chip.warn { background: var(--warn-bg); color: var(--warn); }
+  :root[data-theme="dark"] .warn-text { color: var(--warn); }
+  :root[data-theme="dark"] .stock-bar.alert { background: var(--warn-bg); border-color: #6B4A30; }
+  :root[data-theme="dark"] .danger, :root[data-theme="dark"] .err, :root[data-theme="dark"] .err-text, :root[data-theme="dark"] .gifted-owner .link.quiet.danger { color: var(--bad); }
+  :root[data-theme="dark"] .toast-btn { color: var(--toast-btn); }
+  :root[data-theme="dark"] .tt-knob { background: var(--ink); }
+  :root[data-theme="dark"] select.in { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23B8AAA5' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+  :root[data-theme="dark"] .modal-bg, :root[data-theme="dark"] .sheet-bg { background: rgba(0,0,0,.6); }
+  :root[data-theme="dark"] .qr img { background: #fff; }
 </style>
 </head>
 <body>
   <div id="app"></div>
-  <script type="module" src="app.js?v=1021-1433"></script>
+  <script type="module" src="app.js?v=1026-0014"></script>
 </body>
 </html>
