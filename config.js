@@ -13,7 +13,7 @@ const MERRITT = {
 
   // Shows the editing controls when this Google account signs in.
   // (Display only: the API function and Firestore rules do the real check.)
-  ownerEmail: "alyssamanse@gmail.com",
+  ownerEmail: ["alyssamanse@gmail.com", "m.e.rodriguez214@gmail.com"],
 
   // Firestore document id for this wishlist. Random so it can't be
   // guessed, but the rules don't rely on that. Must match the API

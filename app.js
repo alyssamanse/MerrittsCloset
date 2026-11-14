@@ -1,6 +1,6 @@
-import { CONFIG } from "./config.js?v=1026-0014";
-import { createFirebaseStore, createDemoStore } from "./store.js?v=1026-0014";
-const BUILD = "1026-0014"; // stamped on each publish, matches the ?v= on the script URLs
+import { CONFIG } from "./config.js?v=1114-1040";
+import { createFirebaseStore, createDemoStore } from "./store.js?v=1114-1040";
+const BUILD = "1114-1040"; // stamped on each publish, matches the ?v= on the script URLs
 
 const SIZES = ["Preemie", "Newborn", "0–3M", "3–6M", "6–9M", "6–12M", "9–12M", "12M", "12–18M", "18M", "18–24M", "2T", "3T", "4T", "5T"];
 const MAIN_TABS = CONFIG.tabs || ["wishlist", "closet", "sizes"];
