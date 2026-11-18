@@ -55,6 +55,35 @@ function buildEmail(item, babyName = "Merritt") {
   return { subject, text, html };
 }
 
+// "Someone's getting it" email to the list owner (CLAIM_EMAIL_TO). The gifter's name is included
+// only if they left one; this goes to the owner alone, never to guests.
+function buildClaimEmail(item, from = "", babyName = "Merritt") {
+  const title = [item.brand, item.title].filter(Boolean).join(" ") || "A gift";
+  const size = sizeText(item);
+  const itemLink = item.forName ? `${SITE_URL}#family` : `${SITE_URL}#item-${item.id}`;
+  const who = from ? from : "Someone";
+  const forWhom = item.forName ? ` for ${item.forName}` : "";
+  const subject = `🎁 ${who} is getting ${title}${forWhom}`;
+  const text = [
+    `${who} just tapped "I'll get this" on ${title}${size ? ` (${size})` : ""}${forWhom}.`,
+    from ? "" : "They didn't leave a name.",
+    "",
+    `See it on the wishlist: ${itemLink}`,
+    "",
+    "You get this because you run the list. At most 20 of these a day.",
+  ].filter((l, i, a) => l || a[i - 1]).join("\n");
+  const html = `<!doctype html><html><body style="margin:0;background:#FBF7F2;font-family:Helvetica,Arial,sans-serif;color:#3A2E30">
+  <div style="max-width:520px;margin:0 auto;padding:28px 22px">
+    <p style="font-family:Georgia,serif;font-style:italic;font-size:22px;color:${ACCENT};margin:0 0 18px">${esc(SITE_TITLE || `${babyName}'s Closet`)}</p>
+    <h1 style="font-size:20px;margin:0 0 10px">${esc(who)} is getting a gift${esc(forWhom)}</h1>
+    <p style="font-size:16px;line-height:1.5;margin:0 0 18px"><b>${esc(title)}</b>${size ? ` · ${esc(size)}` : ""}${from ? "" : `<br><span style="color:#766A66;font-size:14px">They didn't leave a name.</span>`}</p>
+    ${safeHttp(item.image) ? `<img src="${esc(item.image)}" alt="" width="200" style="display:block;width:200px;max-width:100%;border-radius:8px;margin:0 0 18px">` : ""}
+    <p style="margin:0 0 10px"><a href="${esc(itemLink)}" style="display:inline-block;background:${ACCENT};color:#FFF8F2;text-decoration:none;font-weight:bold;padding:11px 18px;border-radius:6px">See it on the wishlist</a></p>
+    <p style="font-size:12.5px;color:#766A66;line-height:1.5;margin:22px 0 0;border-top:1px solid #E9DFD7;padding-top:14px">You get this because you run the list. At most 20 of these a day.</p>
+  </div></body></html>`;
+  return { subject, text, html };
+}
+
 // Resend's email API. Returns true when accepted. The idempotency key stops a retried request
 // from sending twice.
 async function resendSend({ key, to, subject, text, html, idem }) {
@@ -115,4 +144,4 @@ async function sendDueAlerts({ db, ref, privRef, key, babyName, send = resendSen
   return { sent, retrying: Object.values(failed).flat().length };
 }
 
-module.exports = { sendDueAlerts, buildEmail, dueItems, resendSend };
+module.exports = { sendDueAlerts, buildEmail, buildClaimEmail, dueItems, resendSend };

@@ -20,7 +20,7 @@ const { reduce, sizeForStyle, brandKey, MAX_STOCK_RESULTS, reducePrivate, PRIVAT
 const crypto = require("crypto");
 const { importLink, checkStock } = require("./importer");
 const { findPhotoChoices } = require("./photos");
-const { sendDueAlerts } = require("./alerts");
+const { sendDueAlerts, buildClaimEmail, resendSend } = require("./alerts");
 const { OAuth2Client } = require("google-auth-library");
 
 const ENV = {
@@ -35,7 +35,29 @@ const ENV = {
   cronAudience: process.env.CRON_AUDIENCE || "https://closet-api-767635696368.us-central1.run.app/cron/daily",
   resendKey: process.env.RESEND_API_KEY || "",
   babyName: process.env.BABY_NAME || "Merritt",
+  // Email the list owner when a gift is claimed. Unset = off (Luca's list leaves it unset).
+  claimEmailTo: (process.env.CLAIM_EMAIL_TO || "").trim(),
 };
+// Claim emails are capped per day so a prank can't flood the inbox (or the Resend quota).
+const CLAIM_EMAILS_PER_DAY = 20;
+const claimMail = { day: "", sent: 0 };
+async function emailClaim(state, payload, now) {
+  if (!ENV.claimEmailTo || !ENV.resendKey) return;
+  const day = new Date(now).toISOString().slice(0, 10);
+  if (claimMail.day !== day) Object.assign(claimMail, { day, sent: 0 });
+  if (claimMail.sent >= CLAIM_EMAILS_PER_DAY) return;
+  const id = payload.itemId;
+  const item = state.items?.[id] || state.family?.[id];
+  if (!item) return;
+  const fam = state.family?.[id];
+  const msg = buildClaimEmail({ ...item, id, forName: fam ? fam.person || fam.for || "" : "" }, String(payload.from || "").trim().slice(0, 40), ENV.babyName);
+  claimMail.sent++;
+  // Waits at most 4s so a slow email service never holds up the guest.
+  await Promise.race([
+    resendSend({ key: ENV.resendKey, to: ENV.claimEmailTo, ...msg, idem: `claim-${id}-${state.claims[id]?.at || now}` }),
+    new Promise((r) => setTimeout(r, 4000)),
+  ]).catch(() => {});
+}
 const CRON_ITEMS = 150, CRON_PARALLEL = 6, CRON_BUDGET_MS = 240000;
 const oidc = new OAuth2Client();
 const MAX_BODY = 16 * 1024;
@@ -312,8 +334,9 @@ functions.http("api", async (req, res) => {
         if (r.changed) tx.set(privRef, r.priv);
       }
       if (changed) tx.set(ref, { ...state, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-      return { state, priv };
+      return { state, priv, changed };
     }, { maxAttempts: 3 });
+    if (action === "claim" && out.changed) await emailClaim(out.state, payload, Date.now());
 
     // Gifter names go back only to the owner; guests get the public view only.
     res.json({ ok: true, data: publicView(out.state), ...(owner && out.priv && { private: out.priv }) });

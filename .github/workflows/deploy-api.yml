@@ -53,7 +53,7 @@ jobs:
             --base-image nodejs22 \
             --region us-central1 \
             --project merrittscloset-4d74f \
-            --update-env-vars "^;^OWNER_EMAIL=alyssamanse@gmail.com,m.e.rodriguez214@gmail.com" \
+            --update-env-vars "^;^OWNER_EMAIL=alyssamanse@gmail.com,m.e.rodriguez214@gmail.com;CLAIM_EMAIL_TO=alyssamanse@gmail.com" \
             --quiet 2>&1 | tee deploy.log
           status=${PIPESTATUS[0]}
           # Surface the reason on the run's summary page if it fails.
